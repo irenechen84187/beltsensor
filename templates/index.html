@@ -1,0 +1,1954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RAD-GATE 4D // Respiratory Motion Gating & Belt Sensor Console</title>
+  <meta name="description" content="Real-time virtual respiratory belt sensor simulator and radiation oncology gating interlock console with diagnostic breathing pattern analysis.">
+  
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Socket.io and Chart.js CDNs -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+  <style>
+    :root {
+      --bg-base: #070b14;
+      --bg-surface: rgba(15, 23, 42, 0.75);
+      --bg-surface-elevated: rgba(30, 41, 59, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(56, 189, 248, 0.25);
+      
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      
+      --beam-on: #10b981;
+      --beam-on-glow: rgba(16, 185, 129, 0.35);
+      --beam-on-bg: rgba(16, 185, 129, 0.12);
+      
+      --beam-hold: #ef4444;
+      --beam-hold-glow: rgba(239, 68, 68, 0.4);
+      --beam-hold-bg: rgba(239, 68, 68, 0.15);
+      
+      --diag-warn: #f59e0b;
+      --diag-warn-glow: rgba(245, 158, 11, 0.35);
+      --diag-warn-bg: rgba(245, 158, 11, 0.12);
+
+      --diag-info: #0ea5e9;
+      --diag-info-bg: rgba(14, 165, 233, 0.12);
+
+      --accent-cyan: #06b6d4;
+      --accent-cyan-glow: rgba(6, 182, 212, 0.35);
+      
+      --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      background-image: 
+        radial-gradient(at 15% 15%, rgba(14, 165, 233, 0.07) 0px, transparent 40%),
+        radial-gradient(at 85% 85%, rgba(16, 185, 129, 0.05) 0px, transparent 45%),
+        linear-gradient(180deg, #070b14 0%, #0a0f1d 100%);
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      padding: 20px 24px 32px;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Layout Container */
+    .app-container {
+      max-width: 1480px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* Header Bar */
+    header.console-header {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-logo-badge {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0ea5e9, #10b981);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
+    }
+
+    .brand-logo-badge svg {
+      width: 24px;
+      height: 24px;
+      fill: #ffffff;
+    }
+
+    .brand-text h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text p {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      letter-spacing: 0.02em;
+    }
+
+    .status-badge-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-subtle);
+      transition: all 0.3s ease;
+    }
+
+    .status-indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      position: relative;
+    }
+
+    .status-pill.connected .status-indicator-dot {
+      background: var(--beam-on);
+      box-shadow: 0 0 10px var(--beam-on);
+      animation: pulse-green 2s infinite;
+    }
+
+    .status-pill.disconnected .status-indicator-dot {
+      background: var(--beam-hold);
+      box-shadow: 0 0 10px var(--beam-hold);
+    }
+
+    .status-pill.active .status-indicator-dot {
+      background: var(--accent-cyan);
+      box-shadow: 0 0 10px var(--accent-cyan);
+      animation: pulse-cyan 1.5s infinite;
+    }
+
+    @keyframes pulse-green {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+      70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    @keyframes pulse-cyan {
+      0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.6); }
+      70% { box-shadow: 0 0 0 8px rgba(6, 182, 212, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+    }
+
+    /* =================================================== */
+    /* TOP DIAGNOSTIC SUMMARY PANEL                        */
+    /* =================================================== */
+    .diagnostic-summary-card {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 18px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .diagnostic-summary-card.diag-normal {
+      border-left: 5px solid var(--beam-on);
+      background: linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.75) 40%);
+    }
+
+    .diagnostic-summary-card.diag-abnormal-warn {
+      border-left: 5px solid var(--diag-warn);
+      background: linear-gradient(90deg, rgba(245, 158, 11, 0.10) 0%, rgba(15, 23, 42, 0.75) 40%);
+      box-shadow: 0 0 24px rgba(245, 158, 11, 0.15);
+    }
+
+    .diagnostic-summary-card.diag-abnormal-alert {
+      border-left: 5px solid var(--beam-hold);
+      background: linear-gradient(90deg, rgba(239, 68, 68, 0.12) 0%, rgba(15, 23, 42, 0.75) 40%);
+      box-shadow: 0 0 28px rgba(239, 68, 68, 0.18);
+    }
+
+    .diagnostic-summary-card.diag-standby {
+      border-left: 5px solid var(--text-muted);
+    }
+
+    .diag-main-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .diag-left-content {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex: 1;
+      min-width: 320px;
+    }
+
+    .diag-icon-wrapper {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.3s ease;
+    }
+
+    .diag-normal .diag-icon-wrapper {
+      background: var(--beam-on-bg);
+      color: var(--beam-on);
+      border: 1px solid var(--beam-on);
+      box-shadow: 0 0 15px var(--beam-on-glow);
+    }
+
+    .diag-abnormal-warn .diag-icon-wrapper {
+      background: var(--diag-warn-bg);
+      color: var(--diag-warn);
+      border: 1px solid var(--diag-warn);
+      box-shadow: 0 0 15px var(--diag-warn-glow);
+    }
+
+    .diag-abnormal-alert .diag-icon-wrapper {
+      background: var(--beam-hold-bg);
+      color: var(--beam-hold);
+      border: 1px solid var(--beam-hold);
+      box-shadow: 0 0 15px var(--beam-hold-glow);
+    }
+
+    .diag-standby .diag-icon-wrapper {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .diag-icon-wrapper svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    .diag-text-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .diag-eyebrow-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .diag-badge-status {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 3px 10px;
+      border-radius: 20px;
+      display: inline-block;
+    }
+
+    .diag-normal .diag-badge-status {
+      background: var(--beam-on-bg);
+      color: var(--beam-on);
+      border: 1px solid var(--beam-on);
+    }
+
+    .diag-abnormal-warn .diag-badge-status {
+      background: var(--diag-warn-bg);
+      color: var(--diag-warn);
+      border: 1px solid var(--diag-warn);
+    }
+
+    .diag-abnormal-alert .diag-badge-status {
+      background: var(--beam-hold-bg);
+      color: var(--beam-hold);
+      border: 1px solid var(--beam-hold);
+    }
+
+    .diag-standby .diag-badge-status {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .diag-timestamp-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .diag-headline {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #ffffff;
+    }
+
+    .diag-description {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      max-width: 900px;
+    }
+
+    .diag-breakdown-chips {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .diag-chip-item {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 6px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 130px;
+    }
+
+    .diag-chip-title {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .diag-chip-value {
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    /* Main Grid Layout */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.25fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 1080px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Common Card Styling */
+    .panel-card {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 12px;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #e2e8f0;
+    }
+
+    .panel-title svg {
+      width: 18px;
+      height: 18px;
+      color: var(--accent-cyan);
+    }
+
+    .badge-subtle {
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.06);
+      padding: 3px 8px;
+      border-radius: 6px;
+      color: var(--text-secondary);
+    }
+
+    /* Hardware Control Panel Styles */
+    .simulator-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 13px 20px;
+      border-radius: 10px;
+      font-family: var(--font-ui);
+      font-size: 0.88rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      user-select: none;
+    }
+
+    .btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .btn-start {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: #ffffff;
+      box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-start:hover:not(:disabled) {
+      background: linear-gradient(135deg, #10b981, #34d399);
+      box-shadow: 0 6px 22px rgba(16, 185, 129, 0.45);
+      transform: translateY(-1px);
+    }
+
+    .btn-start.is-active {
+      background: #047857;
+      border-color: #34d399;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
+    }
+
+    .btn-stop {
+      background: rgba(239, 68, 68, 0.15);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.35);
+    }
+
+    .btn-stop:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.25);
+      color: #ffffff;
+      border-color: #ef4444;
+      transform: translateY(-1px);
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* Simulator telemetry mini stats */
+    .telemetry-mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 12px;
+    }
+
+    .mini-stat-card {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .mini-stat-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .mini-stat-value {
+      font-family: var(--font-mono);
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+
+    /* Parameter Sliders */
+    .controls-group {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .slider-item {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.82rem;
+    }
+
+    .slider-label {
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .slider-val-badge {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--accent-cyan);
+      background: rgba(6, 182, 212, 0.12);
+      border: 1px solid rgba(6, 182, 212, 0.25);
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+    }
+
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      cursor: pointer;
+      box-shadow: 0 0 10px var(--accent-cyan);
+      transition: transform 0.15s, background-color 0.15s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    .presets-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .preset-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .preset-chip {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 0.76rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .preset-chip:hover {
+      background: rgba(6, 182, 212, 0.15);
+      border-color: var(--accent-cyan);
+      color: #ffffff;
+    }
+
+    /* Gating Console */
+    .gating-display-banner {
+      border-radius: 12px;
+      padding: 24px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .gating-display-banner.state-beam-on {
+      background: var(--beam-on-bg);
+      border: 2px solid var(--beam-on);
+      box-shadow: 0 0 35px var(--beam-on-glow), inset 0 0 20px var(--beam-on-glow);
+    }
+
+    .gating-display-banner.state-beam-hold {
+      background: var(--beam-hold-bg);
+      border: 2px solid var(--beam-hold);
+      box-shadow: 0 0 35px var(--beam-hold-glow), inset 0 0 20px var(--beam-hold-glow);
+      animation: alert-pulse 1.2s infinite;
+    }
+
+    @keyframes alert-pulse {
+      0% { border-color: #ef4444; }
+      50% { border-color: #f87171; }
+      100% { border-color: #ef4444; }
+    }
+
+    .gating-icon-wrap {
+      width: 64px;
+      height: 64px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.3s ease;
+    }
+
+    .state-beam-on .gating-icon-wrap {
+      background: var(--beam-on);
+      color: #064e3b;
+      box-shadow: 0 0 24px var(--beam-on);
+    }
+
+    .state-beam-hold .gating-icon-wrap {
+      background: var(--beam-hold);
+      color: #ffffff;
+      box-shadow: 0 0 24px var(--beam-hold);
+    }
+
+    .gating-icon-wrap svg {
+      width: 36px;
+      height: 36px;
+    }
+
+    .gating-state-title {
+      font-size: 2.2rem;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      font-family: var(--font-mono);
+      line-height: 1;
+    }
+
+    .state-beam-on .gating-state-title {
+      color: var(--beam-on);
+      text-shadow: 0 0 20px var(--beam-on-glow);
+    }
+
+    .state-beam-hold .gating-state-title {
+      color: var(--beam-hold);
+      text-shadow: 0 0 20px var(--beam-hold-glow);
+    }
+
+    .gating-state-desc {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      font-weight: 500;
+      letter-spacing: 0.02em;
+    }
+
+    .threshold-control-box {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .threshold-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .threshold-numeric-control {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .threshold-val-input {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border-subtle);
+      color: #f59e0b;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      font-size: 1.1rem;
+      width: 80px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      text-align: right;
+    }
+
+    .threshold-val-input:focus {
+      outline: none;
+      border-color: #f59e0b;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.3);
+    }
+
+    .threshold-scale-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .gating-metrics-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .gating-metric-card {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .gating-metric-title {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .gating-metric-val {
+      font-family: var(--font-mono);
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .audio-btn {
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .audio-btn:hover {
+      border-color: var(--accent-cyan);
+      color: #ffffff;
+    }
+
+    .audio-btn.enabled {
+      border-color: var(--beam-on);
+      color: var(--beam-on);
+      background: rgba(16, 185, 129, 0.1);
+    }
+
+    /* Live Monitoring HUD & Chart */
+    .monitor-panel {
+      grid-column: 1 / -1;
+    }
+
+    .live-hud-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 6px;
+    }
+
+    @media (max-width: 860px) {
+      .live-hud-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .hud-card {
+      background: rgba(10, 16, 30, 0.7);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      transition: border-color 0.2s;
+    }
+
+    .hud-card.displacement-card {
+      border-left: 4px solid var(--accent-cyan);
+    }
+
+    .hud-card.displacement-card.beam-hold-active {
+      border-left-color: var(--beam-hold);
+    }
+
+    .hud-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .hud-main-val {
+      font-family: var(--font-mono);
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .hud-unit {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    .hud-sub-val {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      font-family: var(--font-mono);
+    }
+
+    .phase-badge {
+      display: inline-block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(6, 182, 212, 0.25);
+    }
+
+    .chart-container-card {
+      background: rgba(8, 13, 26, 0.9);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 18px;
+    }
+
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .chart-legend-custom {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 0.78rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-secondary);
+    }
+
+    .legend-line-cyan {
+      width: 20px;
+      height: 3px;
+      background: var(--accent-cyan);
+      border-radius: 2px;
+      box-shadow: 0 0 8px var(--accent-cyan);
+    }
+
+    .legend-line-dashed-amber {
+      width: 20px;
+      height: 0;
+      border-top: 2px dashed #f59e0b;
+    }
+
+    .legend-zone-green {
+      width: 14px;
+      height: 14px;
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid var(--beam-on);
+      border-radius: 3px;
+    }
+
+    .chart-canvas-wrapper {
+      position: relative;
+      height: 340px;
+      width: 100%;
+    }
+
+    footer.app-footer {
+      text-align: center;
+      padding: 12px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    
+    <!-- Top Console Header -->
+    <header class="console-header">
+      <div class="brand-section">
+        <div class="brand-logo-badge">
+          <!-- Linac Crosshair -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <circle cx="12" cy="12" r="4" />
+            <line x1="12" y1="2" x2="12" y2="6" />
+            <line x1="12" y1="18" x2="12" y2="22" />
+            <line x1="2" y1="12" x2="6" y2="12" />
+            <line x1="18" y1="12" x2="22" y2="12" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>RAD-GATE 4D // RESPIRATORY MOTION GATING CONSOLE</h1>
+          <p>Linear Accelerator Interlock &amp; Virtual Pneumatic/Strain-Gauge Belt Transducer</p>
+        </div>
+      </div>
+
+      <div class="status-badge-group">
+        <div id="socket-status-badge" class="status-pill disconnected">
+          <span class="status-indicator-dot"></span>
+          <span id="socket-status-text">WEBSOCKET OFFLINE</span>
+        </div>
+        <div id="sensor-status-badge" class="status-pill">
+          <span class="status-indicator-dot"></span>
+          <span id="sensor-status-text">SENSOR IDLE</span>
+        </div>
+        <div class="status-pill connected">
+          <span class="status-indicator-dot"></span>
+          <span>LINAC GATING ARMED</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ======================================================= -->
+    <!-- TOP CLINICAL DIAGNOSTIC SUMMARY (ABNORMAL PATTERN ALERT)-->
+    <!-- ======================================================= -->
+    <section id="diagnostic-summary-card" class="diagnostic-summary-card diag-standby" aria-label="Respiratory Diagnostic Summary">
+      <div class="diag-main-row">
+        
+        <div class="diag-left-content">
+          <div id="diag-icon-box" class="diag-icon-wrapper">
+            <!-- Dynamic Clinical SVG Icon -->
+            <svg id="diag-status-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <activity stroke-linecap="round" stroke-linejoin="round" />
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+          </div>
+
+          <div class="diag-text-block">
+            <div class="diag-eyebrow-row">
+              <span id="diag-badge" class="diag-badge-status">STANDBY</span>
+              <span class="diag-timestamp-label">Pattern Evaluation &bull; Real-Time</span>
+            </div>
+            <div id="diag-headline" class="diag-headline">Awaiting Respiratory Data Stream</div>
+            <div id="diag-description" class="diag-description">
+              Start the virtual belt sensor to initiate continuous real-time diagnostic evaluation of patient respiratory stability, rate classification, and gating suitability.
+            </div>
+          </div>
+        </div>
+
+        <!-- Clinical Classification Chips -->
+        <div class="diag-breakdown-chips">
+          <div class="diag-chip-item">
+            <span class="diag-chip-title">Rate Classification</span>
+            <span id="diag-chip-rate" class="diag-chip-value">-- BPM (Standby)</span>
+          </div>
+          <div class="diag-chip-item">
+            <span class="diag-chip-title">Tidal Amplitude</span>
+            <span id="diag-chip-depth" class="diag-chip-value">-- mm (Standby)</span>
+          </div>
+          <div class="diag-chip-item">
+            <span class="diag-chip-title">Pattern Regularity</span>
+            <span id="diag-chip-regularity" class="diag-chip-value">--</span>
+          </div>
+          <div class="diag-chip-item">
+            <span class="diag-chip-title">Gating Suitability</span>
+            <span id="diag-chip-suitability" class="diag-chip-value">--</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Main Dashboard Grid -->
+    <div class="dashboard-grid">
+      
+      <!-- 1. HARDWARE CONTROL PANEL (VIRTUAL SIMULATOR) -->
+      <section class="panel-card" aria-label="Hardware Simulator Controls">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+              <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+            </svg>
+            <span>Virtual Belt Sensor Simulator</span>
+          </div>
+          <span class="badge-subtle">Rate: 10 Hz Fixed</span>
+        </div>
+
+        <!-- Start / Stop Action Buttons -->
+        <div class="simulator-actions">
+          <button id="btn-start-sensor" class="btn btn-start" onclick="startSensor()">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>Start Sensor</span>
+          </button>
+          <button id="btn-stop-sensor" class="btn btn-stop" onclick="stopSensor()" disabled>
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12"></rect>
+            </svg>
+            <span>Stop Sensor</span>
+          </button>
+        </div>
+
+        <!-- Mini Telemetry Counters -->
+        <div class="telemetry-mini-grid">
+          <div class="mini-stat-card">
+            <span class="mini-stat-label">Sampling Rate</span>
+            <span class="mini-stat-value">10.0 Hz</span>
+          </div>
+          <div class="mini-stat-card">
+            <span class="mini-stat-label">Packets Streamed</span>
+            <span id="stat-packet-count" class="mini-stat-value">0</span>
+          </div>
+          <div class="mini-stat-card">
+            <span class="mini-stat-label">Simulator Uptime</span>
+            <span id="stat-uptime" class="mini-stat-value">00:00</span>
+          </div>
+        </div>
+
+        <!-- Simulation Parameter Sliders -->
+        <div class="controls-group">
+          <!-- Respiratory Rate (BPM) -->
+          <div class="slider-item">
+            <div class="slider-header">
+              <span class="slider-label">Respiratory Rate</span>
+              <span id="label-bpm-val" class="slider-val-badge">14.0 BPM</span>
+            </div>
+            <input type="range" id="slider-bpm" min="6" max="32" step="0.5" value="14" oninput="onParamChange()">
+          </div>
+
+          <!-- Expansion Amplitude -->
+          <div class="slider-item">
+            <div class="slider-header">
+              <span class="slider-label">Chest Excursion Amplitude</span>
+              <span id="label-amp-val" class="slider-val-badge">8.0 mm</span>
+            </div>
+            <input type="range" id="slider-amplitude" min="2" max="20" step="0.5" value="8" oninput="onParamChange()">
+          </div>
+
+          <!-- Physiological Noise -->
+          <div class="slider-item">
+            <div class="slider-header">
+              <span class="slider-label">Physiological Noise &amp; Tremor</span>
+              <span id="label-noise-val" class="slider-val-badge">0.25 mm</span>
+            </div>
+            <input type="range" id="slider-noise" min="0" max="1.5" step="0.05" value="0.25" oninput="onParamChange()">
+          </div>
+        </div>
+
+        <!-- Clinical Simulation Presets -->
+        <div class="presets-container">
+          <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted);">Clinical Breathing Presets</span>
+          <div class="preset-pills">
+            <button class="preset-chip" onclick="applyPreset(14, 8, 0.25)">Normal Adult (14 BPM)</button>
+            <button class="preset-chip" onclick="applyPreset(24, 6.0, 0.35)">Tachypneic (24 BPM)</button>
+            <button class="preset-chip" onclick="applyPreset(8, 15, 0.4)">Deep Breather (8 BPM)</button>
+            <button class="preset-chip" onclick="applyPreset(16, 3.2, 0.15)">Shallow / Frail (16 BPM)</button>
+            <button class="preset-chip" onclick="applyPreset(18, 9.0, 0.95)">Tremor / Cough (High Noise)</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. RADIATION ONCOLOGY GATING CONSOLE -->
+      <section class="panel-card" aria-label="Radiation Oncology Gating Console">
+        <div class="panel-header">
+          <div class="panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"></path>
+            </svg>
+            <span>Radiation Gating Logic</span>
+          </div>
+          <div>
+            <button id="btn-audio-chime" class="audio-btn" onclick="toggleAudioChime()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+              </svg>
+              <span id="audio-btn-text">Audio Alert: Muted</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Prominent High-Impact Gating Display Banner -->
+        <div id="gating-banner" class="gating-display-banner state-beam-on">
+          <div class="gating-icon-wrap">
+            <svg id="gating-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 3v3m0 12v3M3 12h3m12 0h3" />
+              <circle cx="12" cy="12" r="2.5" fill="currentColor" />
+            </svg>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 4px;">
+            <div id="gating-state-title" class="gating-state-title">BEAM ON</div>
+            <div id="gating-state-desc" class="gating-state-desc">
+              Tumor position stable inside planning target volume (PTV). Radiation delivery active.
+            </div>
+          </div>
+        </div>
+
+        <!-- Interactive Gating Threshold Adjustment -->
+        <div class="threshold-control-box">
+          <div class="threshold-header">
+            <span style="font-size: 0.85rem; font-weight: 600; color: #e2e8f0;">
+              Gating Window Threshold Amplitude
+            </span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="number" id="input-threshold-num" class="threshold-val-input" min="2" max="22" step="0.1" value="6.0" onchange="onThresholdInputChange()">
+              <span style="font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);">mm</span>
+            </div>
+          </div>
+
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <input type="range" id="slider-threshold" min="2" max="20" step="0.1" value="6.0" oninput="onThresholdSliderChange()">
+            <div class="threshold-scale-labels">
+              <span>Stable Baseline (2.0 mm)</span>
+              <span style="color: #f59e0b;">Target Gating Window Cutoff</span>
+              <span>Full Inspiration (20.0 mm)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Clinical Gating Performance Metrics -->
+        <div class="gating-metrics-row">
+          <div class="gating-metric-card">
+            <span class="gating-metric-title">Gating Duty Cycle</span>
+            <span id="metric-duty-cycle" class="gating-metric-val">0.0%</span>
+          </div>
+          <div class="gating-metric-card">
+            <span class="gating-metric-title">Cumulative Beam Time</span>
+            <span id="metric-beam-time" class="gating-metric-val">0.0 s</span>
+          </div>
+          <div class="gating-metric-card">
+            <span class="gating-metric-title">Hold Transitions</span>
+            <span id="metric-hold-count" class="gating-metric-val">0</span>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /dashboard-grid -->
+
+    <!-- 3. REAL-TIME BREATHING MONITORING INTERFACE -->
+    <section class="panel-card monitor-panel" aria-label="Real-time Respiratory Monitor">
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          <span>Real-Time Respiratory Telemetry &amp; Gating Oscilloscope</span>
+        </div>
+        <div>
+          <button class="btn btn-stop" style="padding: 4px 12px; font-size: 0.75rem;" onclick="resetWaveform()">
+            Clear History
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Numerical Telemetry HUD Cards -->
+      <div class="live-hud-grid">
+        <!-- Live Displacement -->
+        <div id="hud-displacement-card" class="hud-card displacement-card">
+          <div class="hud-label">
+            <span>Chest Displacement</span>
+            <span id="hud-threshold-indicator" style="font-family: var(--font-mono); color: var(--beam-on);">WITHIN GATE</span>
+          </div>
+          <div class="hud-main-val">
+            <span id="hud-disp-val">0.00</span>
+            <span class="hud-unit">mm</span>
+          </div>
+          <div class="hud-sub-val" id="hud-delta-val">&plusmn;0.00 mm/s</div>
+        </div>
+
+        <!-- Respiratory Phase -->
+        <div class="hud-card">
+          <div class="hud-label">
+            <span>Breathing Phase</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            </svg>
+          </div>
+          <div style="margin-top: 4px;">
+            <span id="hud-phase-val" class="phase-badge">Standby</span>
+          </div>
+          <div class="hud-sub-val" style="margin-top: 6px;">Motion Vector: <span id="hud-motion-dir">Quiescent</span></div>
+        </div>
+
+        <!-- Measured Breath Rate -->
+        <div class="hud-card">
+          <div class="hud-label">
+            <span>Respiration Rate</span>
+            <span>Target: 12-16</span>
+          </div>
+          <div class="hud-main-val">
+            <span id="hud-rate-val">14.0</span>
+            <span class="hud-unit">BPM</span>
+          </div>
+          <div class="hud-sub-val">Period: <span id="hud-period-val">4.29</span> s/cycle</div>
+        </div>
+
+        <!-- Motion Envelope -->
+        <div class="hud-card">
+          <div class="hud-label">
+            <span>Tidal Excursion Range</span>
+            <span>Rolling 10s</span>
+          </div>
+          <div class="hud-main-val">
+            <span id="hud-range-val">0.0</span>
+            <span class="hud-unit">mm</span>
+          </div>
+          <div class="hud-sub-val">Min: <span id="hud-min-val">0.0</span> mm | Max: <span id="hud-max-val">0.0</span> mm</div>
+        </div>
+      </div>
+
+      <!-- Real-Time Scrolling Chart.js Oscilloscope -->
+      <div class="chart-container-card">
+        <div class="chart-header">
+          <div class="chart-legend-custom">
+            <div class="legend-item">
+              <div class="legend-line-cyan"></div>
+              <span>Respiratory Motion Signal (10 Hz)</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-line-dashed-amber"></div>
+              <span>Gating Threshold (<span id="legend-threshold-val">6.0</span> mm)</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-zone-green"></div>
+              <span>Radiation Treatment Window (&le; Threshold)</span>
+            </div>
+          </div>
+          <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted);">Buffer: 12.0s (120 Samples)</span>
+        </div>
+
+        <div class="chart-canvas-wrapper">
+          <canvas id="respiratoryChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div><strong>RAD-GATE Respiratory Management</strong> &bull; Medical Physics &amp; Radiation Oncology Simulation</div>
+      <div>10 Hz WebSocket Channel &bull; Client-Side Amplitude Threshold Interlock</div>
+    </footer>
+
+  </div>
+
+  <!-- Client-side Logic -->
+  <script>
+    let socket = null;
+    let isSensorStreaming = false;
+    let gatingThreshold = 6.0; // mm
+    let currentGatingState = "BEAM ON";
+    
+    let totalActiveTicks = 0;
+    let beamOnTicks = 0;
+    let beamHoldTransitions = 0;
+    let totalPacketsReceived = 0;
+    let lastSensorValue = 0;
+    let sessionStartTime = null;
+    let uptimeIntervalId = null;
+
+    let audioChimeEnabled = false;
+    let audioCtx = null;
+
+    const MAX_CHART_SAMPLES = 120; // 12s at 10 Hz
+    let chartLabels = [];
+    let chartSignalData = [];
+    let chartThresholdData = [];
+    let chartInstance = null;
+    let recentValues = [];
+
+    // Current simulation parameters cached for diagnostics
+    let currentBpm = 14.0;
+    let currentAmplitude = 8.0;
+    let currentNoise = 0.25;
+
+    // --- Audio Context for Chimes ---
+    function initAudioContext() {
+      if (!audioCtx) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (AudioContextClass) audioCtx = new AudioContextClass();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playGatingSound(state) {
+      if (!audioChimeEnabled) return;
+      try {
+        initAudioContext();
+        if (!audioCtx) return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+
+        if (state === "BEAM ON") {
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(880, now);
+          osc.frequency.exponentialRampToValueAtTime(1320, now + 0.12);
+          gain.gain.setValueAtTime(0.08, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+          osc.start(now);
+          osc.stop(now + 0.16);
+        } else {
+          osc.type = "triangle";
+          osc.frequency.setValueAtTime(320, now);
+          osc.frequency.linearRampToValueAtTime(260, now + 0.18);
+          gain.gain.setValueAtTime(0.12, now);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+          osc.start(now);
+          osc.stop(now + 0.22);
+        }
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
+    function toggleAudioChime() {
+      initAudioContext();
+      audioChimeEnabled = !audioChimeEnabled;
+      const btn = document.getElementById("btn-audio-chime");
+      const text = document.getElementById("audio-btn-text");
+      if (audioChimeEnabled) {
+        btn.classList.add("enabled");
+        text.innerText = "Audio Alert: Active";
+        playGatingSound("BEAM ON");
+      } else {
+        btn.classList.remove("enabled");
+        text.innerText = "Audio Alert: Muted";
+      }
+    }
+
+    // --- Chart.js Setup ---
+    function initChart() {
+      const ctx = document.getElementById("respiratoryChart").getContext("2d");
+      const gradient = ctx.createLinearGradient(0, 0, 0, 320);
+      gradient.addColorStop(0, "rgba(6, 182, 212, 0.4)");
+      gradient.addColorStop(0.7, "rgba(6, 182, 212, 0.08)");
+      gradient.addColorStop(1, "rgba(6, 182, 212, 0.0)");
+
+      for (let i = 0; i < MAX_CHART_SAMPLES; i++) {
+        chartLabels.push("");
+        chartSignalData.push(null);
+        chartThresholdData.push(gatingThreshold);
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: chartLabels,
+          datasets: [
+            {
+              label: "Gating Threshold",
+              data: chartThresholdData,
+              borderColor: "#f59e0b",
+              borderWidth: 2,
+              borderDash: [6, 4],
+              pointRadius: 0,
+              fill: false,
+              tension: 0,
+              order: 1
+            },
+            {
+              label: "Chest Motion (mm)",
+              data: chartSignalData,
+              borderColor: "#06b6d4",
+              borderWidth: 2.5,
+              backgroundColor: gradient,
+              fill: true,
+              pointRadius: (c) => (c.raw !== null && c.raw > gatingThreshold) ? 2.5 : 0,
+              pointBackgroundColor: "#ef4444",
+              pointBorderColor: "#ffffff",
+              pointBorderWidth: 1,
+              tension: 0.35,
+              cubicInterpolationMode: "monotone",
+              order: 2
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          interaction: { intersect: false, mode: "index" },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              enabled: true,
+              callbacks: {
+                label: (ctx) => `Displacement: ${ctx.parsed.y.toFixed(2)} mm`
+              }
+            }
+          },
+          scales: {
+            x: { display: true, grid: { color: "rgba(255, 255, 255, 0.04)" }, ticks: { display: false } },
+            y: {
+              min: 0, max: 18,
+              grid: { color: "rgba(255, 255, 255, 0.07)" },
+              ticks: {
+                color: "#64748b",
+                font: { family: "'JetBrains Mono', monospace", size: 11 },
+                callback: (v) => v.toFixed(1) + " mm"
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // =======================================================
+    // REAL-TIME DIAGNOSTIC SUMMARY EVALUATION LOGIC
+    // =======================================================
+    function evaluateBreathingDiagnostics(bpm, amp, noise) {
+      const card = document.getElementById("diagnostic-summary-card");
+      const badge = document.getElementById("diag-badge");
+      const headline = document.getElementById("diag-headline");
+      const desc = document.getElementById("diag-description");
+      const svgBox = document.getElementById("diag-status-svg");
+
+      const chipRate = document.getElementById("diag-chip-rate");
+      const chipDepth = document.getElementById("diag-chip-depth");
+      const chipReg = document.getElementById("diag-chip-regularity");
+      const chipSuit = document.getElementById("diag-chip-suitability");
+
+      if (!isSensorStreaming) {
+        card.className = "diagnostic-summary-card diag-standby";
+        badge.innerText = "STANDBY";
+        headline.innerText = "Awaiting Respiratory Data Stream";
+        desc.innerText = "Start the virtual belt sensor to initiate continuous real-time diagnostic evaluation of patient respiratory stability, rate classification, and gating suitability.";
+        chipRate.innerText = `${bpm.toFixed(1)} BPM (Idle)`;
+        chipDepth.innerText = `${amp.toFixed(1)} mm (Idle)`;
+        chipReg.innerText = "Standby";
+        chipSuit.innerText = "Offline";
+        svgBox.innerHTML = `
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="8" x2="12" y2="12" />
+          <line x1="12" y1="16" x2="12.01" y2="16" />
+        `;
+        return;
+      }
+
+      // Check anomalies
+      let abnormalities = [];
+      let severity = "normal"; // "normal", "warn", "alert"
+
+      // 1. Respiratory Rate Checks
+      let rateClassText = "Normal Eupnea";
+      if (bpm > 20.0) {
+        rateClassText = "Tachypneic (Rapid)";
+        abnormalities.push({
+          title: "Tachypnea Detected (> 20 BPM)",
+          desc: `Elevated breathing frequency (${bpm.toFixed(1)} BPM) detected. Rapid cycle turnover shortens the stable end-expiration phase, which may reduce radiation beam duty cycle and increase tumor tracking blur.`,
+          level: "warn"
+        });
+      } else if (bpm < 10.0) {
+        rateClassText = "Bradypneic (Slow)";
+        abnormalities.push({
+          title: "Bradypnea / Prolonged Breath Cycle (< 10 BPM)",
+          desc: `Abnormally low respiratory rate (${bpm.toFixed(1)} BPM) with extended cycle period (${(60/bpm).toFixed(1)} s). Ensure patient is awake and uncompromised.`,
+          level: "warn"
+        });
+      }
+
+      // 2. Amplitude / Tidal Depth Checks
+      let depthClassText = "Eupneic (Normal)";
+      if (amp > 13.0) {
+        depthClassText = "Hyperpneic (Deep)";
+        abnormalities.push({
+          title: "High Tidal Excursion / Hyperpnea (> 13 mm)",
+          desc: `Exaggerated chest displacement (${amp.toFixed(1)} mm). Large respiratory excursion can displace tumor margins significantly outside the planning target volume (PTV). Verify gating threshold coverage.`,
+          level: "alert"
+        });
+      } else if (amp < 4.0) {
+        depthClassText = "Hypopneic (Shallow)";
+        abnormalities.push({
+          title: "Shallow Breathing / Weak Excursion (< 4 mm)",
+          desc: `Very low chest excursion (${amp.toFixed(1)} mm). Low signal amplitude decreases signal-to-noise ratio and makes peak/trough demarcation less reliable. Check belt tension.`,
+          level: "warn"
+        });
+      }
+
+      // 3. Noise / Tremor Checks
+      let regText = "High Regularity";
+      if (noise > 0.6) {
+        regText = "High Tremor / Noise";
+        abnormalities.push({
+          title: "Physiological Tremor & Motion Artifact (> 0.6 mm)",
+          desc: `Excessive high-frequency tremor (${noise.toFixed(2)} mm noise). Risk of jittery beam on/off gating toggles. Verify transducer belt contact and check for patient shivering or anxiety.`,
+          level: "alert"
+        });
+      } else if (noise > 0.35) {
+        regText = "Moderate Noise";
+      }
+
+      // Update Breakdown Chips
+      chipRate.innerText = `${bpm.toFixed(1)} BPM (${rateClassText})`;
+      chipDepth.innerText = `${amp.toFixed(1)} mm (${depthClassText})`;
+      chipReg.innerText = regText;
+
+      // Determine overall diagnosis
+      if (abnormalities.length === 0) {
+        card.className = "diagnostic-summary-card diag-normal";
+        badge.innerText = "NORMAL EUPNEA (STABLE)";
+        headline.innerText = "Normal Resting Respiratory Pattern — Target Motion Stable";
+        desc.innerText = `Patient exhibits stable, reproducible breathing kinetics (${bpm.toFixed(1)} BPM, ${amp.toFixed(1)} mm excursion) with negligible artifact. Waveform characteristics are highly optimal for 4D-CT acquisition and linear accelerator gating delivery.`;
+        chipSuit.innerText = "OPTIMAL (STABLE)";
+        chipSuit.style.color = "var(--beam-on)";
+
+        svgBox.innerHTML = `
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+          <polyline points="22 4 12 14.01 9 11.01" />
+        `;
+      } else {
+        // Find highest severity
+        const hasAlert = abnormalities.some(a => a.level === "alert");
+        const dominant = abnormalities[0];
+
+        if (hasAlert) {
+          card.className = "diagnostic-summary-card diag-abnormal-alert";
+          badge.innerText = "ABNORMAL PATTERN DETECTED";
+          chipSuit.innerText = "SUBOPTIMAL (IRREGULAR)";
+          chipSuit.style.color = "var(--beam-hold)";
+          svgBox.innerHTML = `
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+            <line x1="12" y1="9" x2="12" y2="13"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          `;
+        } else {
+          card.className = "diagnostic-summary-card diag-abnormal-warn";
+          badge.innerText = "ABNORMAL: " + (abnormalities.length > 1 ? "MULTIPLE VARIANTS" : abnormalities[0].title.split(" ")[0].toUpperCase());
+          chipSuit.innerText = "CAUTION (MONITOR)";
+          chipSuit.style.color = "var(--diag-warn)";
+          svgBox.innerHTML = `
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          `;
+        }
+
+        headline.innerText = dominant.title;
+        // Combine descriptions if multiple
+        let combinedDesc = dominant.desc;
+        if (abnormalities.length > 1) {
+          combinedDesc += " Also noted: " + abnormalities.slice(1).map(a => a.title).join("; ") + ".";
+        }
+        desc.innerText = combinedDesc;
+      }
+    }
+
+    // --- Socket.IO Client Connection ---
+    function initSocketConnection() {
+      const socketStatusBadge = document.getElementById("socket-status-badge");
+      const socketStatusText = document.getElementById("socket-status-text");
+
+      socket = io();
+
+      socket.on("connect", () => {
+        socketStatusBadge.className = "status-pill connected";
+        socketStatusText.innerText = "WEBSOCKET CONNECTED";
+      });
+
+      socket.on("disconnect", () => {
+        socketStatusBadge.className = "status-pill disconnected";
+        socketStatusText.innerText = "WEBSOCKET DISCONNECTED";
+        updateSensorActiveUI(false);
+      });
+
+      socket.on("sensor_status", (status) => {
+        updateSensorActiveUI(status.active);
+        currentBpm = status.bpm;
+        currentAmplitude = status.amplitude;
+        currentNoise = status.noise_level;
+
+        if (!document.getElementById("slider-bpm").matches(":active")) {
+          document.getElementById("slider-bpm").value = status.bpm;
+          document.getElementById("label-bpm-val").innerText = status.bpm.toFixed(1) + " BPM";
+        }
+        if (!document.getElementById("slider-amplitude").matches(":active")) {
+          document.getElementById("slider-amplitude").value = status.amplitude;
+          document.getElementById("label-amp-val").innerText = status.amplitude.toFixed(1) + " mm";
+        }
+        if (!document.getElementById("slider-noise").matches(":active")) {
+          document.getElementById("slider-noise").value = status.noise_level;
+          document.getElementById("label-noise-val").innerText = status.noise_level.toFixed(2) + " mm";
+        }
+
+        // Re-evaluate diagnostics whenever parameters or state change
+        evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
+      });
+
+      // 10 Hz Real-time Stream Receiver
+      socket.on("respiratory_data", (data) => {
+        processIncomingSample(data);
+      });
+    }
+
+    function processIncomingSample(data) {
+      totalPacketsReceived++;
+      document.getElementById("stat-packet-count").innerText = totalPacketsReceived.toLocaleString();
+
+      const val = data.value;
+      const timeStr = data.time_str;
+      const bpm = data.bpm;
+      const phase = data.phase;
+
+      // Update cached parameters
+      currentBpm = bpm;
+      if (data.amplitude) currentAmplitude = data.amplitude;
+
+      // 1. Radiation Oncology Gating Threshold Check
+      const previousState = currentGatingState;
+      let newState = (val > gatingThreshold) ? "BEAM HOLD" : "BEAM ON";
+
+      totalActiveTicks++;
+      if (newState === "BEAM ON") beamOnTicks++;
+      if (newState !== previousState) {
+        if (newState === "BEAM HOLD") {
+          beamHoldTransitions++;
+          document.getElementById("metric-hold-count").innerText = beamHoldTransitions;
+        }
+        playGatingSound(newState);
+      }
+      currentGatingState = newState;
+
+      updateGatingDisplay(newState, val);
+
+      // Duty Cycle and Cumulative Timers
+      const dutyPercent = totalActiveTicks > 0 ? ((beamOnTicks / totalActiveTicks) * 100).toFixed(1) : 0;
+      document.getElementById("metric-duty-cycle").innerText = dutyPercent + "%";
+      const beamSeconds = (beamOnTicks * 0.1).toFixed(1);
+      document.getElementById("metric-beam-time").innerText = beamSeconds + " s";
+
+      // Live Telemetry Readout
+      document.getElementById("hud-disp-val").innerText = val.toFixed(2);
+      const dispCard = document.getElementById("hud-displacement-card");
+      const thresholdInd = document.getElementById("hud-threshold-indicator");
+
+      if (newState === "BEAM HOLD") {
+        dispCard.classList.add("beam-hold-active");
+        thresholdInd.style.color = "var(--beam-hold)";
+        thresholdInd.innerText = "BEAM HOLD (+" + (val - gatingThreshold).toFixed(2) + "mm)";
+      } else {
+        dispCard.classList.remove("beam-hold-active");
+        thresholdInd.style.color = "var(--beam-on)";
+        thresholdInd.innerText = "WITHIN GATE (" + (gatingThreshold - val).toFixed(2) + "mm margin)";
+      }
+
+      const delta = (val - lastSensorValue) * 10.0;
+      document.getElementById("hud-delta-val").innerText = (delta >= 0 ? "+" : "") + delta.toFixed(2) + " mm/s";
+      lastSensorValue = val;
+
+      const motionDirEl = document.getElementById("hud-motion-dir");
+      if (delta > 0.4) motionDirEl.innerText = "Expansion ↑";
+      else if (delta < -0.4) motionDirEl.innerText = "Contraction ↓";
+      else motionDirEl.innerText = "Plateau ↔";
+
+      document.getElementById("hud-phase-val").innerText = phase;
+      document.getElementById("hud-rate-val").innerText = bpm.toFixed(1);
+      document.getElementById("hud-period-val").innerText = (60.0 / bpm).toFixed(2);
+
+      recentValues.push(val);
+      if (recentValues.length > 100) recentValues.shift();
+      const minVal = Math.min(...recentValues);
+      const maxVal = Math.max(...recentValues);
+      document.getElementById("hud-min-val").innerText = minVal.toFixed(1);
+      document.getElementById("hud-max-val").innerText = maxVal.toFixed(1);
+      document.getElementById("hud-range-val").innerText = (maxVal - minVal).toFixed(1);
+
+      if (chartInstance) {
+        const requiredMax = Math.max(16, Math.ceil(maxVal + 2));
+        if (chartInstance.options.scales.y.max !== requiredMax) {
+          chartInstance.options.scales.y.max = requiredMax;
+        }
+      }
+
+      // Chart Update
+      chartLabels.shift();
+      chartLabels.push(timeStr);
+      chartSignalData.shift();
+      chartSignalData.push(val);
+      chartThresholdData.shift();
+      chartThresholdData.push(gatingThreshold);
+
+      if (chartInstance) chartInstance.update("none");
+
+      // Periodically update diagnostic assessment (every 10 ticks = 1 second)
+      if (totalPacketsReceived % 10 === 0) {
+        evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
+      }
+    }
+
+    function updateGatingDisplay(state, currentVal) {
+      const banner = document.getElementById("gating-banner");
+      const title = document.getElementById("gating-state-title");
+      const desc = document.getElementById("gating-state-desc");
+      const icon = document.getElementById("gating-icon");
+
+      if (state === "BEAM ON") {
+        banner.className = "gating-display-banner state-beam-on";
+        title.innerText = "BEAM ON";
+        desc.innerText = `Tumor in gating tolerance (${currentVal.toFixed(2)} mm ≤ ${gatingThreshold.toFixed(1)} mm). Linear accelerator beam active.`;
+        icon.innerHTML = `<circle cx="12" cy="12" r="9"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3"/><circle cx="12" cy="12" r="2.5" fill="currentColor"/>`;
+      } else {
+        banner.className = "gating-display-banner state-beam-hold";
+        title.innerText = "BEAM HOLD";
+        desc.innerText = `Chest expansion exceeds threshold (${currentVal.toFixed(2)} mm > ${gatingThreshold.toFixed(1)} mm). Radiation beam held.`;
+        icon.innerHTML = `<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>`;
+      }
+    }
+
+    // Hardware Actions
+    function startSensor() {
+      if (socket && socket.connected) {
+        initAudioContext();
+        socket.emit("start_sensor");
+      }
+    }
+
+    function stopSensor() {
+      if (socket && socket.connected) socket.emit("stop_sensor");
+    }
+
+    function updateSensorActiveUI(active) {
+      isSensorStreaming = active;
+      const btnStart = document.getElementById("btn-start-sensor");
+      const btnStop = document.getElementById("btn-stop-sensor");
+      const badge = document.getElementById("sensor-status-badge");
+      const badgeText = document.getElementById("sensor-status-text");
+
+      if (active) {
+        btnStart.classList.add("is-active");
+        btnStart.disabled = true;
+        btnStop.disabled = false;
+        badge.className = "status-pill active";
+        badgeText.innerText = "STREAMING (10 Hz)";
+        if (!sessionStartTime) {
+          sessionStartTime = Date.now();
+          uptimeIntervalId = setInterval(updateUptimeDisplay, 1000);
+        }
+      } else {
+        btnStart.classList.remove("is-active");
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+        badge.className = "status-pill";
+        badgeText.innerText = "SENSOR IDLE";
+        if (uptimeIntervalId) {
+          clearInterval(uptimeIntervalId);
+          uptimeIntervalId = null;
+        }
+      }
+      evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
+    }
+
+    function updateUptimeDisplay() {
+      if (!sessionStartTime) return;
+      const secTotal = Math.floor((Date.now() - sessionStartTime) / 1000);
+      const m = String(Math.floor(secTotal / 60)).padStart(2, "0");
+      const s = String(secTotal % 60).padStart(2, "0");
+      document.getElementById("stat-uptime").innerText = `${m}:${s}`;
+    }
+
+    function onParamChange() {
+      const bpm = parseFloat(document.getElementById("slider-bpm").value);
+      const amp = parseFloat(document.getElementById("slider-amplitude").value);
+      const noise = parseFloat(document.getElementById("slider-noise").value);
+
+      currentBpm = bpm;
+      currentAmplitude = amp;
+      currentNoise = noise;
+
+      document.getElementById("label-bpm-val").innerText = bpm.toFixed(1) + " BPM";
+      document.getElementById("label-amp-val").innerText = amp.toFixed(1) + " mm";
+      document.getElementById("label-noise-val").innerText = noise.toFixed(2) + " mm";
+
+      if (socket && socket.connected) {
+        socket.emit("update_params", { bpm, amplitude: amp, noise_level: noise });
+      }
+      evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
+    }
+
+    function applyPreset(bpm, amp, noise) {
+      document.getElementById("slider-bpm").value = bpm;
+      document.getElementById("slider-amplitude").value = amp;
+      document.getElementById("slider-noise").value = noise;
+      onParamChange();
+    }
+
+    function onThresholdSliderChange() {
+      setGatingThreshold(parseFloat(document.getElementById("slider-threshold").value));
+    }
+
+    function onThresholdInputChange() {
+      const val = parseFloat(document.getElementById("input-threshold-num").value);
+      if (!isNaN(val) && val >= 1.0 && val <= 25.0) {
+        document.getElementById("slider-threshold").value = val;
+        setGatingThreshold(val);
+      }
+    }
+
+    function setGatingThreshold(val) {
+      gatingThreshold = val;
+      document.getElementById("input-threshold-num").value = val.toFixed(1);
+      document.getElementById("legend-threshold-val").innerText = val.toFixed(1);
+
+      for (let i = 0; i < chartThresholdData.length; i++) {
+        chartThresholdData[i] = val;
+      }
+      if (chartInstance) chartInstance.update("none");
+    }
+
+    function resetWaveform() {
+      chartLabels = [];
+      chartSignalData = [];
+      chartThresholdData = [];
+      for (let i = 0; i < MAX_CHART_SAMPLES; i++) {
+        chartLabels.push("");
+        chartSignalData.push(null);
+        chartThresholdData.push(gatingThreshold);
+      }
+      if (chartInstance) {
+        chartInstance.data.labels = chartLabels;
+        chartInstance.data.datasets[0].data = chartThresholdData;
+        chartInstance.data.datasets[1].data = chartSignalData;
+        chartInstance.update();
+      }
+      recentValues = [];
+      totalActiveTicks = 0;
+      beamOnTicks = 0;
+      beamHoldTransitions = 0;
+      document.getElementById("metric-duty-cycle").innerText = "0.0%";
+      document.getElementById("metric-beam-time").innerText = "0.0 s";
+      document.getElementById("metric-hold-count").innerText = "0";
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      initChart();
+      initSocketConnection();
+      evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
+    });
+  </script>
+</body>
+</html>
