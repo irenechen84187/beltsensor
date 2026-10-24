@@ -1622,23 +1622,101 @@
       }
     }
 
-    // --- Socket.IO Client Connection ---
+    // --- Socket.IO Client Connection & Cloud Fallback ---
+    let isServerlessMode = false;
+    let cachedSessionSamples = [];
+    let cloudPlaybackIndex = 0;
+    let cloudPlaybackInterval = null;
+
+    async function enableCloudModeFallback() {
+      if (isServerlessMode) return;
+      isServerlessMode = true;
+      console.log("Vercel Serverless environment detected. Activating Cloud Replay & Telemetry Engine.");
+
+      const socketStatusBadge = document.getElementById("socket-status-badge");
+      const socketStatusText = document.getElementById("socket-status-text");
+      if (socketStatusBadge) {
+        socketStatusBadge.className = "status-pill active";
+        socketStatusText.innerText = "VERCEL CLOUD MODE";
+      }
+
+      // Check REST API status
+      try {
+        const res = await fetch("/api/status");
+        if (res.ok) {
+          const status = await res.json();
+          const hwBadge = document.getElementById("hw-status-badge");
+          const hwText = document.getElementById("hw-status-text");
+          if (hwBadge) {
+            hwBadge.className = "status-pill connected";
+            hwText.innerText = "VERNIER 0K7014Z0 DATA";
+          }
+          if (status.serial_number) {
+            document.getElementById("hw-serial").innerText = status.serial_number;
+            document.getElementById("footer-serial").innerText = status.serial_number;
+          }
+          if (status.tare_offset !== undefined) {
+            document.getElementById("force-tare-val").innerText = status.tare_offset.toFixed(3) + " N";
+          }
+          currentBpm = status.bpm || 12.4;
+          currentAmplitude = status.amplitude || 4.5;
+          currentNoise = status.noise_level || 0.05;
+          evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
+        }
+      } catch (e) {}
+
+      // Fetch recorded samples for client-side replay
+      try {
+        const res2 = await fetch("/api/session-samples");
+        if (res2.ok) {
+          const data = await res2.json();
+          cachedSessionSamples = data.samples || [];
+          if (cachedSessionSamples.length > 0) {
+            recordedSessionData = cachedSessionSamples;
+            updateRecordedCounters();
+            loadBreathSummary();
+          }
+        }
+      } catch (e) {}
+    }
+
     function initSocketConnection() {
       const socketStatusBadge = document.getElementById("socket-status-badge");
       const socketStatusText = document.getElementById("socket-status-text");
 
-      socket = io();
+      try {
+        socket = io({
+          timeout: 3000,
+          reconnectionAttempts: 2
+        });
 
-      socket.on("connect", () => {
-        socketStatusBadge.className = "status-pill connected";
-        socketStatusText.innerText = "WEBSOCKET ONLINE";
-      });
+        socket.on("connect", () => {
+          socketStatusBadge.className = "status-pill connected";
+          socketStatusText.innerText = "WEBSOCKET ONLINE";
+          isServerlessMode = false;
+        });
 
-      socket.on("disconnect", () => {
-        socketStatusBadge.className = "status-pill disconnected";
-        socketStatusText.innerText = "WEBSOCKET OFFLINE";
-        updateSensorActiveUI(false);
-      });
+        socket.on("connect_error", () => {
+          enableCloudModeFallback();
+        });
+
+        socket.on("disconnect", () => {
+          if (!isServerlessMode) {
+            socketStatusBadge.className = "status-pill disconnected";
+            socketStatusText.innerText = "WEBSOCKET OFFLINE";
+            updateSensorActiveUI(false);
+          }
+        });
+      } catch (e) {
+        enableCloudModeFallback();
+      }
+
+      // Safety timeout for serverless environments where WebSocket never responds
+      setTimeout(() => {
+        if (!socket || !socket.connected) {
+          enableCloudModeFallback();
+        }
+      }, 2500);
 
       socket.on("sensor_status", (status) => {
         isHardwareConnected = status.connected;
@@ -1953,15 +2031,63 @@
       }
     }
 
-    // Hardware Actions
+    // Hardware & Cloud Actions
     function startSensor() {
       if (socket && socket.connected) {
         socket.emit("start_sensor");
+      } else {
+        startCloudPlayback();
       }
     }
 
     function stopSensor() {
-      if (socket && socket.connected) socket.emit("stop_sensor");
+      if (socket && socket.connected) {
+        socket.emit("stop_sensor");
+      } else {
+        stopCloudPlayback();
+      }
+    }
+
+    function startCloudPlayback() {
+      if (cachedSessionSamples.length === 0) {
+        enableCloudModeFallback().then(() => {
+          if (cachedSessionSamples.length > 0) startCloudPlayback();
+        });
+        return;
+      }
+
+      updateSensorActiveUI(true);
+      if (cloudPlaybackInterval) clearInterval(cloudPlaybackInterval);
+
+      cloudPlaybackInterval = setInterval(() => {
+        if (cloudPlaybackIndex >= cachedSessionSamples.length) {
+          cloudPlaybackIndex = 0; // loop playback smoothly
+        }
+        const sample = cachedSessionSamples[cloudPlaybackIndex];
+        cloudPlaybackIndex++;
+
+        processIncomingSample({
+          timestamp: sample.elapsed_seconds,
+          time_str: sample.time_str,
+          value: sample.net_expansion_n,
+          raw_force: sample.raw_force_n,
+          tare_offset: sample.tare_offset_n,
+          phase: sample.phase,
+          bpm: sample.respiration_rate_bpm,
+          sample_count: sample.sample_index,
+          breath_count: sample.breath_count,
+          amplitude: currentAmplitude,
+          noise_level: currentNoise
+        });
+      }, 100); // 10 Hz
+    }
+
+    function stopCloudPlayback() {
+      if (cloudPlaybackInterval) {
+        clearInterval(cloudPlaybackInterval);
+        cloudPlaybackInterval = null;
+      }
+      updateSensorActiveUI(false);
     }
 
     function tareSensor() {

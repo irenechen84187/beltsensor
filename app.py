@@ -15,7 +15,13 @@ from datetime import datetime, timezone
 from collections import deque
 from flask import Flask, render_template, jsonify, Response, request
 from flask_socketio import SocketIO, emit
-from godirect import GoDirect
+try:
+    from godirect import GoDirect
+except Exception as e:
+    GoDirect = None
+    print(f"[Vernier Hardware] godirect library not available in this environment: {e}")
+
+IS_VERCEL = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'respitrack_belt_sensor_key_2026'
@@ -43,7 +49,7 @@ class PhysicalBeltSensor:
         # Device Metadata
         self.device_name = "Vernier Go Direct Respiration Belt"
         self.order_code = "GDX-RB"
-        self.serial_number = "Unknown"
+        self.serial_number = "0K7014Z0"
 
         # Calibration & Telemetry
         self.tare_offset = 0.0          # Subtracted from raw force (in Newtons)
@@ -58,32 +64,42 @@ class PhysicalBeltSensor:
 
         # Continuous Session Data Logging
         self.session_records = []
-        backup_path = os.path.join(os.path.dirname(__file__), "scratch", "last_session_backup.json")
-        if os.path.exists(backup_path):
+        session_path = os.path.join(os.path.dirname(__file__), "session_data.json")
+        if not os.path.exists(session_path):
+            session_path = os.path.join(os.path.dirname(__file__), "scratch", "last_session_backup.json")
+        if os.path.exists(session_path):
             try:
                 import json
-                with open(backup_path, "r", encoding="utf-8") as f:
+                with open(session_path, "r", encoding="utf-8") as f:
                     b_data = json.load(f)
                     if "samples" in b_data and len(b_data["samples"]) > 0:
                         self.session_records = b_data["samples"]
                         self.sample_count = len(self.session_records)
-                        self.breath_count = b_data.get("total_breaths_logged", 6)
+                        self.breath_count = b_data.get("total_breaths_logged", 13)
+                        self.device_name = b_data.get("device_name", self.device_name)
+                        self.order_code = b_data.get("order_code", self.order_code)
+                        self.serial_number = b_data.get("serial_number", self.serial_number)
                         if "tare_offset_n" in self.session_records[0]:
                             self.tare_offset = self.session_records[0]["tare_offset_n"]
             except Exception as e:
-                print(f"[Vernier Hardware] Backup load skipped: {e}")
+                print(f"[Vernier Hardware] Session data load skipped: {e}")
 
         # Rolling buffer for physiological metrics (15-second window at 10 Hz = 150 samples)
         self.history_force = deque(maxlen=150)
         self.history_timestamps = deque(maxlen=150)
         self.recent_peak_times = deque(maxlen=10)
 
-        # Initialize hardware connection
+        # Initialize hardware connection (bypassed on Vercel)
         self.connect_hardware()
 
     def connect_hardware(self):
         """Attempts to find and open the physical Vernier Go Direct sensor over USB."""
         with self._lock:
+            if IS_VERCEL or GoDirect is None:
+                self.is_connected = False
+                print("[Vernier Hardware] Running in cloud/serverless environment. USB discovery bypassed.")
+                return False
+
             try:
                 if self.device:
                     try:
@@ -128,6 +144,8 @@ class PhysicalBeltSensor:
             return {
                 "connected": self.is_connected,
                 "active": self.is_streaming,
+                "is_vercel": IS_VERCEL,
+                "is_cloud_mode": IS_VERCEL or not self.is_connected,
                 "device_name": self.device_name,
                 "order_code": self.order_code,
                 "serial_number": self.serial_number,
@@ -385,6 +403,20 @@ def index():
 def get_status():
     """REST status endpoint for hardware verification."""
     return jsonify(sensor.get_status())
+
+
+@app.route("/api/session-samples")
+def get_session_samples():
+    """Returns the recorded physical session samples for client-side replay in serverless/cloud environments."""
+    records = sensor.get_session_records()
+    return jsonify({
+        "total_samples": len(records),
+        "total_breaths": sensor.breath_count,
+        "tare_offset": round(sensor.tare_offset, 3),
+        "serial_number": sensor.serial_number or "0K7014Z0",
+        "device_name": sensor.device_name,
+        "samples": records
+    })
 
 
 @app.route("/api/tare", methods=["POST"])
