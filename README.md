@@ -1,168 +1,107 @@
-# RAD-GATE 4D // Virtual Respiratory Belt Sensor & Radiation Oncology Gating Console
+# RespiTrack // Vernier Go Direct® Respiration Belt Breathing Pattern Recorder
 
-A complete local web application built with **Python (Flask & Flask-SocketIO)** for the backend and **HTML5 / Vanilla CSS / JavaScript (with Chart.js)** for the frontend on a single unified webpage.
+A local web application built with **Python (Flask & Flask-SocketIO)** for the backend and **HTML5 / Vanilla CSS / JavaScript (with Chart.js)** for the frontend.
 
-This system serves as both a **Virtual Hardware Belt Sensor Simulator** (broadcasting physiological chest expansion data at 10 Hz) and a **Real-Time Clinical Radiation Therapy Gating Monitor** (controlling a simulated linear accelerator beam interlock).
+This system directly interfaces with a **physical Vernier Go Direct® Respiration Belt (GDX-RB)** via USB HID, streaming physiological chest expansion force and respiration rate at **10 Hz** to a dedicated **Real-Time Breathing Pattern Acquisition, Waveform Oscilloscope, and Session Recording Console**.
 
 ---
 
-## System Architecture
+## Hardware Specifications & Architecture
 
 ```
 +---------------------------------------------------------------------------------------+
-|                                 PYTHON FLASK BACKEND                                  |
+|                 PHYSICAL HARDWARE: VERNIER GO DIRECT® RESPIRATION BELT                |
 |                                                                                       |
-|  [BeltSensorSimulator (app.py)]                                                       |
-|  - Asymmetric human respiratory model: y(t) = baseline + amp * ((1-cos(θ))/2)^1.15    |
-|  - Gaussian physiological noise & cardiogenic ripple (standard deviation: 0.25 mm)    |
-|  - Precise 10 Hz timer loop (100 ms tick interval)                                    |
-|  - WebSocket events: start_sensor, stop_sensor, update_params, respiratory_data       |
+|  - Transducer: Force gauge ribbon & chest expansion strap                             |
+|  - Model / Order Code: GDX-RB                                                         |
+|  - Interface: USB Human Interface Device (HID) / Bluetooth Low Energy                 |
+|  - Physical Channels:                                                                 |
+|      * Channel 1: Force (Newtons, N)                                                  |
+|      * Channel 2: Respiration Rate (Breaths Per Minute, BPM)                          |
++-------------------------------------------+-------------------------------------------+
+                                            | USB HID via python `godirect`
+                                            v
++---------------------------------------------------------------------------------------+
+|                                 PYTHON FLASK BACKEND                                  |
+|                                      (app.py)                                         |
+|  - 10 Hz background data polling thread (100 ms tick interval)                        |
+|  - Automatic device discovery & USB reconnection engine                               |
+|  - Instantaneous Tare / Zero baseline compensation: Net Force = Raw Force - Tare     |
+|  - Algorithmic breath cycle detection & real-time respiration phase estimation        |
+|  - Session recording buffer (up to 200,000 samples) & CSV/JSON export engine         |
 +-------------------------------------------+-------------------------------------------+
                                             | WebSocket (Socket.IO)
                                             v
 +---------------------------------------------------------------------------------------+
-|                               UNIFIED CLINICAL CONSOLE                                |
+|                             BREATHING PATTERN CONSOLE                                 |
 |                              (templates/index.html)                                   |
 |                                                                                       |
-|  [Hardware Control Panel]        [Radiation Gating Console]   [Live Oscilloscope]     |
-|  - Start / Stop controls         - Threshold: 6.0 mm (adj)    - 10 Hz Chart.js stream |
-|  - BPM & Amplitude sliders       - "BEAM ON"  (val <= thresh) - Real-time displacement|
-|  - Clinical patient presets      - "BEAM HOLD"(val > thresh)  - Phase & breath rate   |
-|  - 10 Hz packet telemetry        - Duty Cycle & Beam-on time  - Dynamic threshold line|
+|  [Hardware & Tare Calibration]   [Session Data Logger]    [Live Oscilloscope]         |
+|  - Start / Stop Stream controls  - Live duration timer    - 10 Hz Chart.js waveform   |
+|  - Tare / Zero Baseline button   - Total samples counter  - Real-time Expansion (N)   |
+|  - Raw & Net Force telemetry     - Breaths detected count - Inhalation peak markers   |
+|  - S/N & Hardware Status badge   - Download CSV & JSON    - Phase & Breathing Rate    |
 +---------------------------------------------------------------------------------------+
 ```
 
 ---
 
-## Key Features
+## Operating Guide: Recording Your Breathing Pattern
 
-### 1. Top Real-Time Diagnostic Summary (Abnormal Pattern Detection)
-Located prominently at the top of the interface, the clinical diagnostic engine automatically analyzes the live respiratory waveform and flags abnormal patterns:
-- **`NORMAL EUPNEA (STABLE)`** (Emerald): Normal resting breathing ($10 - 20\text{ BPM}$, $4 - 13\text{ mm}$ excursion, low artifact). Tagged as **OPTIMAL (STABLE)** for 4D-CT and radiation gating.
-- **`TACHYPNEA DETECTED`** (Amber Warning): Respiratory rate $> 20\text{ BPM}$. Alerts that rapid cycle turnover shortens end-expiration and diminishes beam delivery duty cycle.
-- **`BRADYPNEA DETECTED`** (Amber Warning): Respiratory rate $< 10\text{ BPM}$ with prolonged cycle period.
-- **`HYPERPNEA / EXCESSIVE EXCURSION`** (Crimson Alert): Tidal excursion $> 13\text{ mm}$. Warns that deep breathing can cause tumor excursions beyond PTV safety margins.
-- **`SHALLOW HYPOVENTILATION`** (Amber Warning): Low amplitude $< 4\text{ mm}$. Warns of low signal-to-noise ratio.
-- **`HIGH TREMOR / MOTION ARTIFACT`** (Crimson Alert): Physiological noise $> 0.6\text{ mm}$. Warns of shivering or loose transducer belt tension.
-- **Clinical Breakdown Chips**: Live telemetry chips for *Rate Classification*, *Tidal Amplitude*, *Pattern Regularity*, and *Gating Suitability*.
+### 1. Fasten the Belt
+1. Unclip the elastic strap and wrap the belt around your lower rib cage or upper abdomen.
+2. Fasten the clip securely so the belt is snug against your chest at empty lungs (end-expiration), but comfortable for normal breathing.
 
-### 2. Hardware Control Panel (Virtual Belt Sensor Simulator)
-- **Start / Stop Sensor Controls**: Toggles the background thread broadcasting simulated respiratory displacement.
-- **10 Hz Transmission**: Broadcasts at a fixed 10 Hz rate (every 100 ms) over WebSockets.
-- **Physiological Breathing Model**:
-  - Realistic asymmetric breathing pattern (longer end-expiration pause vs rapid inhalation).
-  - Minor physiological noise representing muscle tremor and cardiogenic artifacts.
-- **Real-Time Parameter Sliders**:
-  - **Respiratory Rate**: 6 – 32 Breaths Per Minute (BPM).
-  - **Chest Excursion Amplitude**: 2 – 20 mm displacement.
-  - **Physiological Noise Level**: 0.0 – 1.5 mm.
-- **Clinical Presets**: One-click switching between *Normal Adult (14 BPM)*, *Tachypneic (22 BPM)*, *Deep Breather (8 BPM)*, and *Shallow / Frail (16 BPM)*.
+### 2. Connect via USB
+Plug the USB cable from the Go Direct Respiration Belt into any available USB port on your Mac.
 
-### 2. Radiation Oncology Gating Console (Linac Beam Control)
-In external beam radiation therapy (e.g., lung or liver SBRT), tumors move continuously due to patient respiration. Gating restricts radiation delivery strictly to the phase where the tumor is stable within the planning target volume (PTV).
-
-- **Gating Logic**:
-  - **`BEAM ON`**: Triggered when chest expansion amplitude is **below or equal to** the Gating Threshold ($\le 6.0\text{ mm}$). Linear accelerator radiation beam is active.
-  - **`BEAM HOLD`**: Triggered when chest expansion amplitude rises **above** the Gating Threshold ($> 6.0\text{ mm}$) during inhalation. Linear accelerator beam is held to spare healthy tissue.
-- **Interactive Threshold Adjuster**: Live slider and numeric input to customize the gating window cutoff amplitude ($2.0 - 20.0\text{ mm}$).
-- **Clinical Metrics HUD**:
-  - **Gating Duty Cycle**: Live beam delivery efficiency percentage ($\frac{\text{Beam-On Time}}{\text{Total Session Time}} \times 100\%$).
-  - **Cumulative Beam Time**: Total treatment seconds delivered.
-  - **Hold Transitions Counter**: Tracks patient breathing irregularities.
-- **Acoustic Gating Alert**: Synthesized Web Audio API sound chime (no external audio files required) with instant mute/unmute toggle.
-
-### 3. Real-Time Telemetry & Scrolling Oscilloscope (Chart.js)
-- **Live Numerical Readouts**:
-  - Instantaneous chest displacement ($mm$) with color-coded threshold status.
-  - Respiratory phase detection (*End-Expiration*, *Inhaling*, *Peak Inspiration*, *Exhaling*).
-  - Calculated breathing frequency ($BPM$) and cycle period ($s$).
-  - Rolling 10-second minimum, maximum, and tidal range ($mm$).
-- **Real-Time Scrolling Line Graph**:
-  - 120-sample rolling buffer (12-second window at 10 Hz).
-  - High-contrast neon cyan trace with cubic spline smoothing and glowing gradient fill.
-  - Dynamic horizontal amber dashed Gating Threshold line.
-  - Automatic red highlight on data points that breach the threshold.
-
----
-
-## Installation & Setup Instructions
-
-### Prerequisites
-- **Python 3.10+** (Tested on Python 3.10, 3.11, 3.12, 3.13, 3.14)
-- Modern web browser (Chrome, Edge, Safari, Firefox)
-
-### Step 1: Clone or Navigate to the Project Directory
+### 3. Start the Web App
 ```bash
 cd "/Users/irene/Desktop/belt sensor app"
+./.venv/bin/python app.py
 ```
-
-### Step 2: Create and Activate a Python Virtual Environment
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
-*(On Windows: `.venv\Scripts\activate`)*
-
-### Step 3: Install Required Dependencies
-```bash
-pip install -r requirements.txt
-```
-
-> **What gets installed:**
-> - `Flask>=3.0.0`: Core web server.
-> - `flask-socketio>=5.3.0`: Real-time WebSocket support.
-> - `simple-websocket>=1.0.0`: High-performance WebSocket protocol engine compatible with standard Python threading.
-
----
-
-## Running the Application Locally
-
-Run `app.py`:
-```bash
-python3 app.py
-```
-
-Open your browser and navigate to:
+Open your browser to:
 ```
 http://127.0.0.1:5001
 ```
 
-> **Note on Port 5001 vs 5000 on macOS**:
-> The app defaults to port **`5001`** because macOS Monterey and later reserve port `5000` for Apple AirPlay Receiver (`ControlCenter`). If you prefer port 5000 or any custom port, you can run:
-> ```bash
-> PORT=5000 python3 app.py
-> ```
+### 4. Zero / Tare Calibration
+1. Breathe out naturally and pause briefly at end-expiration (the trough of the breath).
+2. Click **Tare / Zero Baseline**. This zeroes the resting baseline tension so that:
+   - **End-Expiration Baseline**: $\approx 0.0\text{ N}$
+   - **Inhalation Chest Expansion**: $> 0.0\text{ N}$ (typically $1.5\text{ N} - 6.0\text{ N}$)
+
+### 5. Record & Download Session Data
+1. Click **Start Recording**. The web app will stream live chest expansion force at 10 Hz and automatically record every sample to the session buffer.
+2. Breathe normally (or follow your experimental breathing protocol).
+3. Watch the real-time **Breathing Pattern Oscilloscope**, instantaneous **Respiration Rate (BPM)**, **Respiratory Phase**, and **Breath Count**.
+4. When finished, click **Stop Recording**.
+5. Click **Download CSV** (or **JSON**) to save the full time-series data to your computer for analysis in Microsoft Excel, Python/pandas, R, or MATLAB.
 
 ---
 
-## Project Structure
+## Data Export Columns (CSV)
 
-```
-belt sensor app/
-├── app.py                 # Flask server, 10 Hz background simulator thread & WebSocket events
-├── requirements.txt       # Python dependencies (Flask, Flask-SocketIO, simple-websocket)
-├── README.md              # Documentation and operating guide
-├── templates/
-│   └── index.html         # Unified single-page interface (UI, CSS styles, Chart.js & Socket.IO client)
-└── .venv/                 # Python virtual environment
-```
+| Column | Description |
+| :--- | :--- |
+| `sample_index` | Sequential sample number (1, 2, 3...) |
+| `timestamp_iso` | Precise UTC ISO-8601 timestamp |
+| `time_str` | Wall clock time (`HH:MM:SS.s`) |
+| `elapsed_seconds` | Elapsed recording time from session start |
+| `raw_force_n` | Raw uncalibrated transducer force ($N$) |
+| `tare_offset_n` | Subtracted baseline tension ($N$) |
+| `net_expansion_n` | Calibrated chest expansion tension ($N$) |
+| `respiration_rate_bpm`| Respiration rate in Breaths Per Minute |
+| `phase` | Respiratory phase (`Inhaling`, `Peak`, `Exhaling`, `Trough`) |
+| `breath_count` | Cumulative count of completed breath cycles |
 
 ---
 
-## Verification & Testing
+## API Endpoints
 
-An automated verification test is included:
-```bash
-python3 -c "
-import socketio, time
-sio = socketio.Client()
-samples = []
-sio.on('respiratory_data', lambda d: samples.append(d))
-sio.connect('http://127.0.0.1:5001')
-sio.emit('start_sensor')
-time.sleep(2.0)
-sio.emit('stop_sensor')
-print(f'Received {len(samples)} samples at 10 Hz! Gating and broadcast verified.')
-sio.disconnect()
-"
-```
+- **Live Status**: `GET /api/status`
+- **Tare Calibration**: `POST /api/tare`
+- **USB Reconnect**: `POST /api/reconnect`
+- **CSV Data Download**: `GET /api/export/csv`
+- **JSON Data Download**: `GET /api/export/json`
+- **Clear Session Buffer**: `POST /api/export/clear`
