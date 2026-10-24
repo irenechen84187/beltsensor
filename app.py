@@ -58,6 +58,20 @@ class PhysicalBeltSensor:
 
         # Continuous Session Data Logging
         self.session_records = []
+        backup_path = os.path.join(os.path.dirname(__file__), "scratch", "last_session_backup.json")
+        if os.path.exists(backup_path):
+            try:
+                import json
+                with open(backup_path, "r", encoding="utf-8") as f:
+                    b_data = json.load(f)
+                    if "samples" in b_data and len(b_data["samples"]) > 0:
+                        self.session_records = b_data["samples"]
+                        self.sample_count = len(self.session_records)
+                        self.breath_count = b_data.get("total_breaths_logged", 6)
+                        if "tare_offset_n" in self.session_records[0]:
+                            self.tare_offset = self.session_records[0]["tare_offset_n"]
+            except Exception as e:
+                print(f"[Vernier Hardware] Backup load skipped: {e}")
 
         # Rolling buffer for physiological metrics (15-second window at 10 Hz = 150 samples)
         self.history_force = deque(maxlen=150)
@@ -394,6 +408,202 @@ def post_reconnect():
 # ==========================================
 # Breathing Pattern Data Export Endpoints
 # ==========================================
+
+def extract_breath_cycles(records):
+    """
+    Analyzes 10 Hz time-series session records to extract discrete physical breath cycles,
+    including start/peak/end times, cycle duration, instantaneous BPM, inhalation (Ti) &
+    exhalation (Te) durations, I:E ratio, baseline resting tension, peak force, and net excursion.
+    """
+    if len(records) < 15:
+        return []
+
+    times = [r["elapsed_seconds"] for r in records]
+    nets = [r["net_expansion_n"] for r in records]
+    raws = [r.get("raw_force_n", 0.0) for r in records]
+    time_strs = [r["time_str"] for r in records]
+
+    # Find candidate local peaks (excursion > 1.0 N)
+    candidates = []
+    for i in range(2, len(nets) - 2):
+        if nets[i] > nets[i - 1] and nets[i] >= nets[i + 1] and nets[i] > 1.0:
+            candidates.append({
+                "idx": i,
+                "t": times[i],
+                "val": nets[i],
+                "raw": raws[i],
+                "time_str": time_strs[i]
+            })
+
+    # Cluster peaks within 1.4s window
+    clusters = []
+    for c in candidates:
+        if not clusters or (c["t"] - clusters[-1][-1]["t"]) > 1.4:
+            clusters.append([c])
+        else:
+            clusters[-1].append(c)
+
+    merged_peaks = [max(cl, key=lambda x: x["val"]) for cl in clusters]
+
+    cycles = []
+    for k in range(len(merged_peaks)):
+        p = merged_peaks[k]
+        start_search = merged_peaks[k - 1]["idx"] if k > 0 else 0
+        sub_pre = nets[start_search:p["idx"]]
+        min_pre = min(sub_pre) if sub_pre else 0.0
+        trough_pre_idx = start_search + sub_pre.index(min_pre) if sub_pre else 0
+
+        end_search = merged_peaks[k + 1]["idx"] if k < len(merged_peaks) - 1 else len(nets) - 1
+        sub_post = nets[p["idx"]:end_search]
+        min_post = min(sub_post) if sub_post else 0.0
+        trough_post_idx = p["idx"] + sub_post.index(min_post) if sub_post else len(nets) - 1
+
+        t_start = times[trough_pre_idx]
+        t_peak = p["t"]
+        t_end = times[trough_post_idx]
+
+        dur = max(0.4, round(t_end - t_start, 2))
+        t_inhale = max(0.2, round(t_peak - t_start, 2))
+        t_exhale = max(0.2, round(t_end - t_peak, 2))
+        bpm = round(60.0 / dur, 1) if dur > 0 else 0.0
+        ie_val = round(t_exhale / max(0.1, t_inhale), 2)
+
+        base_f = round(min_pre, 3)
+        peak_f = round(p["val"], 3)
+        excursion = round(peak_f - base_f, 2)
+
+        if excursion >= 14.0:
+            pattern = "Deep Sigh / Max Thoracic Expansion"
+        elif excursion >= 7.0:
+            pattern = "Deep Thoracic Expansion"
+        elif dur >= 15.0:
+            pattern = "Sustained Breath-Hold / Pause"
+        elif bpm > 22.0:
+            pattern = "Rapid Catch-up Cycle"
+        elif excursion < 2.0:
+            pattern = "Shallow Tidal Breath"
+        else:
+            pattern = "Normal Tidal Eupnea"
+
+        cycles.append({
+            "breath_number": k + 1,
+            "start_time_s": t_start,
+            "peak_time_s": t_peak,
+            "end_time_s": t_end,
+            "start_clock": time_strs[trough_pre_idx],
+            "peak_clock": p["time_str"],
+            "end_clock": time_strs[trough_post_idx],
+            "cycle_duration_s": dur,
+            "respiration_rate_bpm": bpm,
+            "inhale_duration_s": t_inhale,
+            "exhale_duration_s": t_exhale,
+            "ie_ratio": f"1:{ie_val:.2f}",
+            "baseline_force_n": base_f,
+            "peak_force_n": peak_f,
+            "net_excursion_n": excursion,
+            "classification": pattern
+        })
+
+    return cycles
+
+
+@app.route("/api/export/summary-csv")
+def export_summary_csv():
+    """
+    Exports the human-readable breath-by-breath physical summary table as a clean CSV,
+    aggregating each breath cycle with exact kinematics, I:E ratio, forces, and classification.
+    """
+    records = sensor.get_session_records()
+    cycles = extract_breath_cycles(records)
+    now_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    serial = sensor.serial_number or "0K7014Z0"
+    filename = f"breathing_physical_summary_{serial}_{now_str}.csv"
+
+    output = io.StringIO()
+    output.write("# RESPITRACK // Physical Breathing Pattern Summary Report\n")
+    output.write(f"# Device: {sensor.device_name} (Model: {sensor.order_code})\n")
+    output.write(f"# Serial Number: {serial}\n")
+    output.write(f"# Tare Resting Baseline: {sensor.tare_offset:.3f} N\n")
+    dur_sec = round(len(records) * 0.1, 1)
+    output.write(f"# Total Session Duration: {dur_sec} seconds\n")
+    output.write(f"# Total Physical Breaths: {len(cycles)}\n")
+    mean_bpm = round(len(cycles) / (dur_sec / 60.0), 1) if dur_sec > 0 else 0.0
+    output.write(f"# Average Respiratory Rate: {mean_bpm} BPM\n")
+    output.write("#\n")
+
+    fieldnames = [
+        "breath_number",
+        "clock_start",
+        "clock_peak",
+        "clock_end",
+        "elapsed_start_s",
+        "elapsed_peak_s",
+        "elapsed_end_s",
+        "cycle_duration_s",
+        "respiration_rate_bpm",
+        "inhale_duration_s",
+        "exhale_duration_s",
+        "ie_ratio",
+        "resting_baseline_force_n",
+        "peak_force_n",
+        "net_expansion_force_n",
+        "physical_classification"
+    ]
+
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    for c in cycles:
+        writer.writerow({
+            "breath_number": c["breath_number"],
+            "clock_start": c["start_clock"],
+            "clock_peak": c["peak_clock"],
+            "clock_end": c["end_clock"],
+            "elapsed_start_s": c["start_time_s"],
+            "elapsed_peak_s": c["peak_time_s"],
+            "elapsed_end_s": c["end_time_s"],
+            "cycle_duration_s": c["cycle_duration_s"],
+            "respiration_rate_bpm": c["respiration_rate_bpm"],
+            "inhale_duration_s": c["inhale_duration_s"],
+            "exhale_duration_s": c["exhale_duration_s"],
+            "ie_ratio": c["ie_ratio"],
+            "resting_baseline_force_n": c["baseline_force_n"],
+            "peak_force_n": c["peak_force_n"],
+            "net_expansion_force_n": c["net_excursion_n"],
+            "physical_classification": c["classification"]
+        })
+
+    csv_data = output.getvalue()
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Type": "text/csv; charset=utf-8"
+        }
+    )
+
+
+@app.route("/api/export/summary-json")
+def export_summary_json():
+    """Returns the breath-by-breath physical summary table as JSON."""
+    records = sensor.get_session_records()
+    cycles = extract_breath_cycles(records)
+    dur_sec = round(len(records) * 0.1, 1)
+    mean_bpm = round(len(cycles) / (dur_sec / 60.0), 1) if dur_sec > 0 else 0.0
+
+    return jsonify({
+        "system": "RESPITRACK",
+        "device_name": sensor.device_name,
+        "order_code": sensor.order_code,
+        "serial_number": sensor.serial_number or "0K7014Z0",
+        "tare_offset_n": round(sensor.tare_offset, 3),
+        "duration_seconds": dur_sec,
+        "total_samples": len(records),
+        "total_breaths": len(cycles),
+        "average_bpm": mean_bpm,
+        "cycles": cycles
+    })
+
 
 @app.route("/api/export/csv")
 def export_csv():

@@ -1,0 +1,19 @@
+# RESPITRACK // Physical Breathing Pattern Summary Report
+# Device: Go Direct® Respiration Belt (Model: GDX-RB)
+# Serial Number: 0K7014Z0
+# Tare Resting Baseline: 2.1462 N
+# Total Session Duration: 66.8 seconds
+# Total Physical Breaths: 10
+# Average Respiratory Rate: 9.0 BPM
+#
+breath_number,clock_start,clock_peak,clock_end,elapsed_start_s,elapsed_peak_s,elapsed_end_s,cycle_duration_s,respiration_rate_bpm,inhale_duration_s,exhale_duration_s,ie_ratio,resting_baseline_force_n,peak_force_n,net_expansion_force_n,physical_classification
+1,18:38:09.8,18:38:11.7,18:38:12.4,0.0,1.91,2.61,2.61,23.0,1.91,0.7,1:0.37,0.0,1.587,1.59,Rapid Catch-up Cycle
+2,18:38:12.4,18:38:23.3,18:38:25.0,2.61,13.51,15.21,12.6,4.8,10.9,1.7,1:0.16,0.0,4.568,4.57,Normal Tidal Eupnea
+3,18:38:25.0,18:38:46.7,18:38:47.1,15.21,36.91,37.31,22.1,2.7,21.7,0.4,1:0.02,0.0,2.317,2.32,Sustained Breath-Hold / Pause
+4,18:38:47.1,18:38:49.8,18:38:50.7,37.31,40.01,40.91,3.6,16.7,2.7,0.9,1:0.33,0.889,10.93,10.04,Deep Thoracic Expansion
+5,18:38:50.7,18:38:54.1,18:38:56.4,40.91,44.31,46.61,5.7,10.5,3.4,2.3,1:0.68,0.0,3.618,3.62,Normal Tidal Eupnea
+6,18:38:56.4,18:38:58.8,18:38:59.5,46.61,49.01,49.71,3.1,19.4,2.4,0.7,1:0.29,0.0,1.52,1.52,Shallow Tidal Breath
+7,18:38:59.5,18:39:02.4,18:39:02.9,49.71,52.61,53.1,3.39,17.7,2.9,0.49,1:0.17,0.0,8.592,8.59,Deep Thoracic Expansion
+8,18:39:02.9,18:39:06.1,18:39:08.2,53.1,56.31,58.4,5.3,11.3,3.21,2.09,1:0.65,0.0,18.603,18.6,Deep Sigh / Max Thoracic Expansion
+9,18:39:08.2,18:39:09.2,18:39:12.0,58.4,59.4,62.21,3.81,15.7,1.0,2.81,1:2.81,0.8,5.475,4.67,Normal Tidal Eupnea
+10,18:39:12.0,18:39:13.9,18:39:16.5,62.21,64.11,66.7,4.49,13.4,1.9,2.59,1:1.36,0.792,5.953,5.16,Normal Tidal Eupnea

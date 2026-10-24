@@ -880,6 +880,96 @@
       flex-wrap: wrap;
       gap: 10px;
     }
+
+    /* Physical Breath Table Styling */
+    .physical-table-wrapper {
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(10, 16, 29, 0.7);
+    }
+
+    .physical-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.82rem;
+    }
+
+    .physical-table th {
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text-secondary);
+      font-family: var(--font-ui);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+    }
+
+    .physical-table td {
+      padding: 11px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: #e2e8f0;
+      white-space: nowrap;
+    }
+
+    .physical-table tr:hover {
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    .mono-cell {
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    .badge-pattern {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      font-family: var(--font-ui);
+    }
+
+    .badge-pattern.eupnea {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #34d399;
+    }
+
+    .badge-pattern.deep {
+      background: rgba(14, 165, 233, 0.15);
+      border: 1px solid rgba(14, 165, 233, 0.35);
+      color: #38bdf8;
+    }
+
+    .badge-pattern.sigh {
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      color: #c084fc;
+      font-weight: 700;
+    }
+
+    .badge-pattern.pause {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: #fbbf24;
+    }
+
+    .badge-pattern.rapid {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #f87171;
+    }
+
+    .badge-pattern.shallow {
+      background: rgba(148, 163, 184, 0.15);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: #cbd5e1;
+    }
   </style>
 </head>
 <body>
@@ -1027,22 +1117,29 @@
             </div>
 
             <!-- Download Actions -->
-            <div class="download-btn-row">
-              <button id="btn-download-csv" class="btn btn-download-primary" onclick="downloadSessionCSV()" disabled title="Download recorded session as CSV (Excel / Pandas / MATLAB compatible)">
+            <div class="download-btn-row" style="grid-template-columns: 1.4fr 1.1fr 0.8fr 0.8fr;">
+              <button id="btn-download-summary" class="btn btn-download-primary" onclick="downloadPhysicalSummaryCSV()" disabled title="Download clean human-readable breath-by-breath table in CSV">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <span>Summary CSV</span>
+              </button>
+
+              <button id="btn-download-csv" class="btn btn-download-secondary" onclick="downloadSessionCSV()" disabled title="Download raw 10 Hz time-series CSV">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
                   <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
-                <span>Download CSV</span>
+                <span>Raw 10Hz</span>
               </button>
 
               <button id="btn-download-json" class="btn btn-download-secondary" onclick="downloadSessionJSON()" disabled title="Download structured JSON file">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                  <polyline points="14 2 14 8 20 8"></polyline>
-                </svg>
-                <span>JSON</span>
+                JSON
               </button>
 
               <button id="btn-clear-rec" class="btn btn-clear-data" onclick="clearSessionRecording()" title="Reset session samples and breath counter">
@@ -1250,6 +1347,58 @@
       </div><!-- /Right Column -->
 
     </div><!-- /dashboard-grid -->
+
+    <!-- 4. PHYSICAL BREATH-BY-BREATH CYCLE TELEMETRY -->
+    <section class="panel-card" aria-label="Physical Breath-by-Breath Table">
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="3" y1="15" x2="21" y2="15"></line>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+          </svg>
+          <span>Physical Breath-by-Breath Summary Table</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span id="summary-badge-count" class="badge-subtle">0 Breaths Analyzed</span>
+          <button id="btn-table-download-csv" class="btn btn-download-primary" style="padding: 5px 12px; font-size: 0.75rem;" onclick="downloadPhysicalSummaryCSV()" disabled title="Download breath-by-breath table as CSV">
+            Download Physical Summary (CSV)
+          </button>
+          <button class="btn btn-rescan" style="padding: 5px 12px; font-size: 0.75rem;" onclick="loadBreathSummary()" title="Recompute breath cycle breakdown">
+            Refresh Table
+          </button>
+        </div>
+      </div>
+
+      <div class="physical-table-wrapper">
+        <table class="physical-table">
+          <thead>
+            <tr>
+              <th>Breath #</th>
+              <th>Clock Window</th>
+              <th>Elapsed Window</th>
+              <th>Cycle Duration (T)</th>
+              <th>Breath Rate (BPM)</th>
+              <th>Inhale (Ti)</th>
+              <th>Exhale (Te)</th>
+              <th>I:E Ratio</th>
+              <th>Resting Base</th>
+              <th>Peak Inhale</th>
+              <th>Net Excursion</th>
+              <th>Physical Classification</th>
+            </tr>
+          </thead>
+          <tbody id="breath-table-body">
+            <tr>
+              <td colspan="12" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                No completed breath cycles analyzed yet. Complete a recording session to view the physical breakdown.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
     <!-- Footer -->
     <footer class="app-footer">
@@ -1633,13 +1782,86 @@
         elDur.innerText = `${m}:${s}`;
       }
 
+      const btnSummary = document.getElementById("btn-download-summary");
+      const btnTableCsv = document.getElementById("btn-table-download-csv");
       const btnCsv = document.getElementById("btn-download-csv");
       const btnHeaderCsv = document.getElementById("btn-header-csv");
       const btnJson = document.getElementById("btn-download-json");
       const isEnabled = (count > 0);
+
+      if (btnSummary) btnSummary.disabled = !isEnabled;
+      if (btnTableCsv) btnTableCsv.disabled = !isEnabled;
       if (btnCsv) btnCsv.disabled = !isEnabled;
       if (btnHeaderCsv) btnHeaderCsv.disabled = !isEnabled;
       if (btnJson) btnJson.disabled = !isEnabled;
+    }
+
+    function downloadPhysicalSummaryCSV() {
+      window.location.href = "/api/export/summary-csv";
+    }
+
+    async function loadBreathSummary() {
+      try {
+        const res = await fetch("/api/export/summary-json");
+        if (!res.ok) return;
+        const data = await res.json();
+        renderBreathTable(data.cycles || []);
+      } catch (e) {
+        console.error("Error loading breath summary:", e);
+      }
+    }
+
+    function renderBreathTable(cycles) {
+      const tbody = document.getElementById("breath-table-body");
+      const badgeCount = document.getElementById("summary-badge-count");
+      if (badgeCount) {
+        badgeCount.innerText = `${cycles.length} Breaths Analyzed`;
+      }
+      const btnTableCsv = document.getElementById("btn-table-download-csv");
+      if (btnTableCsv) {
+        btnTableCsv.disabled = (cycles.length === 0);
+      }
+
+      if (!tbody) return;
+      if (!cycles || cycles.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="12" style="text-align: center; color: var(--text-muted); padding: 24px;">
+              No completed breath cycles analyzed yet. Complete a recording session to view the physical breakdown.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      let html = "";
+      cycles.forEach((c) => {
+        let badgeClass = "eupnea";
+        const clsLower = (c.classification || "").toLowerCase();
+        if (clsLower.includes("sigh")) badgeClass = "sigh";
+        else if (clsLower.includes("deep")) badgeClass = "deep";
+        else if (clsLower.includes("pause") || clsLower.includes("hold")) badgeClass = "pause";
+        else if (clsLower.includes("rapid") || clsLower.includes("catch-up")) badgeClass = "rapid";
+        else if (clsLower.includes("shallow")) badgeClass = "shallow";
+
+        html += `
+          <tr>
+            <td class="mono-cell" style="color: #38bdf8; font-weight: 700;">#${c.breath_number}</td>
+            <td class="mono-cell" style="font-size: 0.76rem; color: var(--text-secondary);">${c.start_clock} → ${c.end_clock}</td>
+            <td class="mono-cell">${c.start_time_s.toFixed(1)}s - ${c.end_time_s.toFixed(1)}s</td>
+            <td class="mono-cell" style="color: #f1f5f9; font-weight: 700;">${c.cycle_duration_s.toFixed(1)} s</td>
+            <td class="mono-cell" style="color: ${c.respiration_rate_bpm > 20 ? '#f87171' : c.respiration_rate_bpm < 10 ? '#fbbf24' : '#34d399'}; font-weight: 700;">${c.respiration_rate_bpm.toFixed(1)}</td>
+            <td class="mono-cell">${c.inhale_duration_s.toFixed(1)} s</td>
+            <td class="mono-cell">${c.exhale_duration_s.toFixed(1)} s</td>
+            <td class="mono-cell" style="color: #94a3b8;">${c.ie_ratio}</td>
+            <td class="mono-cell" style="color: #64748b;">${c.baseline_force_n.toFixed(2)} N</td>
+            <td class="mono-cell" style="color: #f8fafc;">${c.peak_force_n.toFixed(2)} N</td>
+            <td class="mono-cell" style="color: #38bdf8; font-weight: 700;">+${c.net_excursion_n.toFixed(2)} N</td>
+            <td><span class="badge-pattern ${badgeClass}">${c.classification}</span></td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
     }
 
     function downloadSessionCSV() {
@@ -1782,6 +2004,7 @@
         badgeText.innerText = "SENSOR STANDBY";
         if (recDot) recDot.className = "rec-idle-dot";
         if (recText) recText.innerText = "SESSION BUFFER IDLE";
+        loadBreathSummary();
       }
       evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
     }
@@ -1806,6 +2029,7 @@
       initSocketConnection();
       evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
       updateRecordedCounters();
+      loadBreathSummary();
     });
   </script>
 </body>

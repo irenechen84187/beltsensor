@@ -80,7 +80,28 @@ http://127.0.0.1:5001
 
 ---
 
-## Data Export Columns (CSV)
+## Data Export Formats
+
+### 1. Physical Breath-by-Breath Summary Report (`/api/export/summary-csv`)
+*Aggregates every breath cycle into human-readable physiological kinetics:*
+
+| Column | Description |
+| :--- | :--- |
+| `breath_number` | Sequential breath index (`#1, #2, #3...`) |
+| `clock_start`, `clock_peak`, `clock_end` | Wall-clock timestamps (`HH:MM:SS.s`) |
+| `elapsed_start_s`, `elapsed_peak_s`, `elapsed_end_s` | Elapsed recording seconds |
+| `cycle_duration_s` | Total breath cycle duration ($T$ in seconds) |
+| `respiration_rate_bpm` | Instantaneous respiratory rate ($60/T$ in BPM) |
+| `inhale_duration_s` ($T_i$) | Inhalation expansion phase duration |
+| `exhale_duration_s` ($T_e$) | Exhalation deflation phase duration |
+| `ie_ratio` | Inhalation-to-exhalation ratio ($1:x$) |
+| `resting_baseline_force_n` | Baseline tension at start of breath ($N$) |
+| `peak_force_n` | Maximum chest expansion force reached ($N$) |
+| `net_expansion_force_n` | Net tidal chest excursion ($\Delta F = \text{Peak} - \text{Base}$) |
+| `physical_classification` | Clinical pattern (e.g. `Normal Tidal Eupnea`, `Deep Sigh`, `Sustained Breath-Hold`) |
+
+### 2. Raw 10 Hz Time-Series Stream (`/api/export/csv`)
+*Continuous 100 ms samples for signal processing & DSP analysis:*
 
 | Column | Description |
 | :--- | :--- |
@@ -102,6 +123,9 @@ http://127.0.0.1:5001
 - **Live Status**: `GET /api/status`
 - **Tare Calibration**: `POST /api/tare`
 - **USB Reconnect**: `POST /api/reconnect`
-- **CSV Data Download**: `GET /api/export/csv`
-- **JSON Data Download**: `GET /api/export/json`
+- **Physical Summary CSV**: `GET /api/export/summary-csv`
+- **Physical Summary JSON**: `GET /api/export/summary-json`
+- **Raw 10 Hz CSV**: `GET /api/export/csv`
+- **Raw JSON Stream**: `GET /api/export/json`
 - **Clear Session Buffer**: `POST /api/export/clear`
+
