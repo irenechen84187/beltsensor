@@ -76,7 +76,12 @@ http://127.0.0.1:5001
 2. Breathe normally (or follow your experimental breathing protocol).
 3. Watch the real-time **Breathing Pattern Oscilloscope**, instantaneous **Respiration Rate (BPM)**, **Respiratory Phase**, and **Breath Count**.
 4. When finished, click **Stop Recording**.
-5. Click **Download CSV** (or **JSON**) to save the full time-series data to your computer for analysis in Microsoft Excel, Python/pandas, R, or MATLAB.
+### 6. Public HTTPS Deployment & Remote Access
+To view your physical belt streaming live on your phone, iPad, or share with colleagues anywhere:
+```bash
+./share_live.sh
+```
+This generates a secure, free public URL (e.g. `https://instant-newly-recorded-owner.trycloudflare.com`) that tunnels directly to your local Vernier USB hardware.
 
 ---
 
