@@ -23,7 +23,12 @@ except Exception as e:
 
 IS_VERCEL = bool(os.environ.get("VERCEL") or os.environ.get("VERCEL_ENV"))
 
-app = Flask(__name__)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, "templates"),
+    static_folder=os.path.join(BASE_DIR, "static")
+)
 app.config['SECRET_KEY'] = 'respitrack_belt_sensor_key_2026'
 
 # Threading mode is robust across all modern Python versions (3.10-3.14+)
@@ -394,8 +399,22 @@ sensor = PhysicalBeltSensor()
 
 
 @app.route("/")
+@app.route("/index")
+@app.route("/index.html")
+@app.route("/api")
+@app.route("/api/")
+@app.route("/api/index")
+@app.route("/api/index.py")
 def index():
     """Renders the Respiration Belt Breathing Pattern Acquisition Console."""
+    return render_template("index.html")
+
+
+@app.errorhandler(404)
+def handle_not_found(e):
+    """Gracefully handle 404s in serverless/cloud environments by rendering the main console."""
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Endpoint not found", "path": request.path}), 404
     return render_template("index.html")
 
 

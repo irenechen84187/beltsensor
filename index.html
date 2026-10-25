@@ -1,0 +1,2587 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RespiTrack // Vernier Go Direct Respiration Belt Breathing Pattern Recorder</title>
+  <meta name="description"
+    content="Real-time Vernier Go Direct Respiration Belt (GDX-RB) USB hardware telemetry, continuous breathing pattern acquisition, real-time waveform oscilloscope, and session data download in CSV/JSON.">
+
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+
+  <!-- Socket.io and Chart.js CDNs -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <!-- Vernier Go Direct Browser SDK (WebHID & Web Bluetooth) -->
+  <script src="/static/godirect.min.umd.js"></script>
+  <script>
+    if (typeof godirect === 'undefined') {
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/@vernier/godirect@1.8.3/dist/godirect.min.umd.js';
+      document.head.appendChild(s);
+    }
+  </script>
+
+  <style>
+    :root {
+      --bg-base: #070b14;
+      --bg-surface: rgba(15, 23, 42, 0.75);
+      --bg-surface-elevated: rgba(30, 41, 59, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(56, 189, 248, 0.25);
+
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+
+      --status-active: #10b981;
+      --status-active-glow: rgba(16, 185, 129, 0.35);
+      --status-active-bg: rgba(16, 185, 129, 0.12);
+
+      --status-alert: #ef4444;
+      --status-alert-glow: rgba(239, 68, 68, 0.4);
+      --status-alert-bg: rgba(239, 68, 68, 0.15);
+
+      --status-warn: #f59e0b;
+      --status-warn-glow: rgba(245, 158, 11, 0.35);
+      --status-warn-bg: rgba(245, 158, 11, 0.12);
+
+      --status-info: #0ea5e9;
+      --status-info-bg: rgba(14, 165, 233, 0.12);
+
+      --accent-cyan: #06b6d4;
+      --accent-cyan-glow: rgba(6, 182, 212, 0.35);
+      --accent-amber: #f59e0b;
+      --accent-emerald: #10b981;
+
+      --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-base);
+      background-image:
+        radial-gradient(at 15% 15%, rgba(14, 165, 233, 0.08) 0px, transparent 40%),
+        radial-gradient(at 85% 85%, rgba(16, 185, 129, 0.06) 0px, transparent 45%),
+        linear-gradient(180deg, #070b14 0%, #0a0f1d 100%);
+      color: var(--text-primary);
+      font-family: var(--font-ui);
+      min-height: 100vh;
+      padding: 20px 24px 32px;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Layout Container */
+    .app-container {
+      max-width: 1480px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* Header Bar */
+    header.console-header {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-logo-badge {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0ea5e9, #10b981);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
+    }
+
+    .brand-logo-badge svg {
+      width: 24px;
+      height: 24px;
+      fill: none;
+      stroke: #ffffff;
+      stroke-width: 2.2;
+    }
+
+    .brand-text h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text p {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      letter-spacing: 0.02em;
+    }
+
+    .status-badge-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-subtle);
+      transition: all 0.3s ease;
+    }
+
+    .status-indicator-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      position: relative;
+    }
+
+    .status-pill.connected .status-indicator-dot {
+      background: var(--status-active);
+      box-shadow: 0 0 10px var(--status-active);
+      animation: pulse-green 2s infinite;
+    }
+
+    .status-pill.disconnected .status-indicator-dot {
+      background: var(--status-alert);
+      box-shadow: 0 0 10px var(--status-alert);
+    }
+
+    .status-pill.active .status-indicator-dot {
+      background: var(--accent-cyan);
+      box-shadow: 0 0 10px var(--accent-cyan);
+      animation: pulse-cyan 1.5s infinite;
+    }
+
+    @keyframes pulse-green {
+      0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+      }
+
+      70% {
+        box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+      }
+    }
+
+    @keyframes pulse-cyan {
+      0% {
+        box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.6);
+      }
+
+      70% {
+        box-shadow: 0 0 0 8px rgba(6, 182, 212, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(6, 182, 212, 0);
+      }
+    }
+
+    /* =================================================== */
+    /* TOP BREATHING PATTERN DIAGNOSTIC BANNER             */
+    /* =================================================== */
+    .diagnostic-summary-card {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 18px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .diagnostic-summary-card.diag-normal {
+      border-left: 5px solid var(--status-active);
+      background: linear-gradient(90deg, rgba(16, 185, 129, 0.08) 0%, rgba(15, 23, 42, 0.75) 40%);
+    }
+
+    .diagnostic-summary-card.diag-abnormal-warn {
+      border-left: 5px solid var(--status-warn);
+      background: linear-gradient(90deg, rgba(245, 158, 11, 0.10) 0%, rgba(15, 23, 42, 0.75) 40%);
+      box-shadow: 0 0 24px rgba(245, 158, 11, 0.15);
+    }
+
+    .diagnostic-summary-card.diag-abnormal-alert {
+      border-left: 5px solid var(--status-alert);
+      background: linear-gradient(90deg, rgba(239, 68, 68, 0.12) 0%, rgba(15, 23, 42, 0.75) 40%);
+      box-shadow: 0 0 28px rgba(239, 68, 68, 0.18);
+    }
+
+    .diagnostic-summary-card.diag-standby {
+      border-left: 5px solid var(--text-muted);
+    }
+
+    .diag-main-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .diag-left-content {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex: 1;
+      min-width: 320px;
+    }
+
+    .diag-icon-wrapper {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .diag-normal .diag-icon-wrapper {
+      background: var(--status-active-bg);
+      border-color: var(--status-active);
+      color: var(--status-active);
+    }
+
+    .diag-abnormal-warn .diag-icon-wrapper {
+      background: var(--status-warn-bg);
+      border-color: var(--status-warn);
+      color: var(--status-warn);
+    }
+
+    .diag-abnormal-alert .diag-icon-wrapper {
+      background: var(--status-alert-bg);
+      border-color: var(--status-alert);
+      color: var(--status-alert);
+    }
+
+    .diag-standby .diag-icon-wrapper {
+      color: var(--text-muted);
+    }
+
+    .diag-icon-wrapper svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    .diag-text-block {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .diag-eyebrow-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .diag-badge-status {
+      font-size: 0.72rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-secondary);
+    }
+
+    .diag-normal .diag-badge-status {
+      background: var(--status-active-bg);
+      color: var(--status-active);
+      border: 1px solid var(--status-active);
+    }
+
+    .diag-abnormal-warn .diag-badge-status {
+      background: var(--status-warn-bg);
+      color: var(--status-warn);
+      border: 1px solid var(--status-warn);
+    }
+
+    .diag-abnormal-alert .diag-badge-status {
+      background: var(--status-alert-bg);
+      color: var(--status-alert);
+      border: 1px solid var(--status-alert);
+    }
+
+    .diag-timestamp-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .diag-headline {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      color: #ffffff;
+    }
+
+    .diag-description {
+      font-size: 0.84rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+      max-width: 950px;
+    }
+
+    .diag-breakdown-chips {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .diag-chip-item {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 6px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 140px;
+    }
+
+    .diag-chip-title {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .diag-chip-value {
+      font-family: var(--font-mono);
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    /* Main Grid Layout */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.35fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 1080px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Common Card Styling */
+    .panel-card {
+      background: var(--bg-surface);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .panel-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+    }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 12px;
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #e2e8f0;
+    }
+
+    .panel-title svg {
+      width: 18px;
+      height: 18px;
+      color: var(--accent-cyan);
+    }
+
+    .badge-subtle {
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.06);
+      padding: 3px 8px;
+      border-radius: 6px;
+      color: var(--text-secondary);
+    }
+
+    /* Hardware Control Actions */
+    .hardware-actions {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 600px) {
+      .hardware-actions {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 16px;
+      border-radius: 10px;
+      font-family: var(--font-ui);
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      user-select: none;
+    }
+
+    .btn svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .btn-record-start {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: #ffffff;
+      box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+      font-size: 0.92rem;
+      padding: 13px 20px;
+    }
+
+    .btn-record-start:hover:not(:disabled) {
+      background: linear-gradient(135deg, #10b981, #34d399);
+      box-shadow: 0 6px 22px rgba(16, 185, 129, 0.45);
+      transform: translateY(-1px);
+    }
+
+    .btn-record-start.is-active {
+      background: linear-gradient(135deg, #047857, #059669);
+      border: 1px solid rgba(16, 185, 129, 0.6);
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+    }
+
+    .btn-record-stop {
+      background: linear-gradient(135deg, #b91c1c, #ef4444);
+      color: #ffffff;
+      box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+      font-size: 0.92rem;
+      padding: 13px 20px;
+    }
+
+    .btn-record-stop:hover:not(:disabled) {
+      background: linear-gradient(135deg, #ef4444, #f87171);
+      box-shadow: 0 6px 22px rgba(239, 68, 68, 0.45);
+      transform: translateY(-1px);
+    }
+
+    .btn-tare {
+      background: rgba(14, 165, 233, 0.15);
+      border-color: rgba(14, 165, 233, 0.35);
+      color: #38bdf8;
+    }
+
+    .btn-tare:hover:not(:disabled) {
+      background: rgba(14, 165, 233, 0.28);
+      border-color: #38bdf8;
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.3);
+    }
+
+    .btn-rescan {
+      background: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-subtle);
+      color: var(--text-secondary);
+    }
+
+    .btn-rescan:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-primary);
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none !important;
+    }
+
+    /* Force Balance Stats */
+    .force-balance-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .force-col {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .force-col-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+
+    .force-col-val {
+      font-family: var(--font-mono);
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #f1f5f9;
+    }
+
+    .force-col.highlight .force-col-val {
+      color: #38bdf8;
+    }
+
+    /* Recorded Session Card */
+    .recording-session-box {
+      background: rgba(16, 185, 129, 0.06);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      position: relative;
+    }
+
+    .rec-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .rec-status-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #e2e8f0;
+      text-transform: uppercase;
+    }
+
+    .rec-pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+      box-shadow: 0 0 12px #ef4444;
+      animation: pulse-recording 1.2s infinite;
+    }
+
+    .rec-idle-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #64748b;
+    }
+
+    @keyframes pulse-recording {
+      0% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+      }
+
+      70% {
+        transform: scale(1.15);
+        box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+      }
+
+      100% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+      }
+    }
+
+    .rec-stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 10px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .rec-stat-col {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .rec-stat-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+    }
+
+    .rec-stat-val {
+      font-family: var(--font-mono);
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    .download-btn-row {
+      display: grid;
+      grid-template-columns: 1.4fr 1.1fr 0.9fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 600px) {
+      .download-btn-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .btn-download-primary {
+      background: linear-gradient(135deg, #0284c7, #0ea5e9);
+      color: #ffffff;
+      border-color: rgba(56, 189, 248, 0.4);
+      box-shadow: 0 4px 16px rgba(14, 165, 233, 0.35);
+      font-weight: 700;
+    }
+
+    .btn-download-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+      box-shadow: 0 6px 20px rgba(14, 165, 233, 0.5);
+    }
+
+    .btn-download-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+      color: #e2e8f0;
+    }
+
+    .btn-download-secondary:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.15);
+      color: #ffffff;
+    }
+
+    .btn-clear-data {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+
+    .btn-clear-data:hover:not(:disabled) {
+      background: rgba(239, 68, 68, 0.25);
+      color: #ffffff;
+    }
+
+    .btn-connect-usb {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: #ffffff;
+      border: 1px solid rgba(16, 185, 129, 0.5);
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 10px 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-connect-usb:hover:not(:disabled) {
+      background: linear-gradient(135deg, #10b981, #34d399);
+      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-connect-ble {
+      background: linear-gradient(135deg, #2563eb, #3b82f6);
+      color: #ffffff;
+      border: 1px solid rgba(59, 130, 246, 0.5);
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 10px 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-connect-ble:hover:not(:disabled) {
+      background: linear-gradient(135deg, #3b82f6, #60a5fa);
+      box-shadow: 0 6px 18px rgba(59, 130, 246, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-disconnect-hw {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #cbd5e1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-disconnect-hw:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.14);
+      color: #ffffff;
+    }
+
+    .tare-guide-box {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      line-height: 1.45;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 8px;
+      border-left: 3px solid #38bdf8;
+    }
+
+    /* Live Telemetry HUD */
+    .live-hud-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    @media (max-width: 900px) {
+      .live-hud-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 500px) {
+      .live-hud-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .hud-card {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hud-card.expansion-card {
+      border-left: 4px solid var(--accent-cyan);
+    }
+
+    .hud-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .hud-main-val {
+      font-family: var(--font-mono);
+      font-size: 2.1rem;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+
+    .hud-unit {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .hud-sub-val {
+      font-size: 0.75rem;
+      font-family: var(--font-mono);
+      color: var(--text-secondary);
+    }
+
+    .phase-badge {
+      display: inline-block;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(6, 182, 212, 0.15);
+      border: 1px solid rgba(6, 182, 212, 0.4);
+      color: var(--accent-cyan);
+      letter-spacing: 0.03em;
+    }
+
+    /* Oscilloscope Chart */
+    .chart-container-card {
+      background: rgba(10, 16, 29, 0.8);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 16px 20px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .chart-legend-custom {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .legend-line-cyan {
+      width: 20px;
+      height: 3px;
+      background: var(--accent-cyan);
+      border-radius: 2px;
+    }
+
+    .legend-dot-red {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      border: 1px solid #ffffff;
+    }
+
+    .chart-canvas-wrapper {
+      position: relative;
+      height: 340px;
+      width: 100%;
+    }
+
+    /* Footer */
+    footer.app-footer {
+      border-top: 1px solid var(--border-subtle);
+      padding-top: 16px;
+      margin-top: 10px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    /* Physical Breath Table Styling */
+    .physical-table-wrapper {
+      overflow-x: auto;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      background: rgba(10, 16, 29, 0.7);
+    }
+
+    .physical-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.82rem;
+    }
+
+    .physical-table th {
+      background: rgba(15, 23, 42, 0.95);
+      color: var(--text-secondary);
+      font-family: var(--font-ui);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.7rem;
+      letter-spacing: 0.05em;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+    }
+
+    .physical-table td {
+      padding: 11px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: #e2e8f0;
+      white-space: nowrap;
+    }
+
+    .physical-table tr:hover {
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    .mono-cell {
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    .badge-pattern {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      font-family: var(--font-ui);
+    }
+
+    .badge-pattern.eupnea {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      color: #34d399;
+    }
+
+    .badge-pattern.deep {
+      background: rgba(14, 165, 233, 0.15);
+      border: 1px solid rgba(14, 165, 233, 0.35);
+      color: #38bdf8;
+    }
+
+    .badge-pattern.sigh {
+      background: rgba(168, 85, 247, 0.15);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+      color: #c084fc;
+      font-weight: 700;
+    }
+
+    .badge-pattern.pause {
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      color: #fbbf24;
+    }
+
+    .badge-pattern.rapid {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #f87171;
+    }
+
+    .badge-pattern.shallow {
+      background: rgba(148, 163, 184, 0.15);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: #cbd5e1;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app-container">
+
+    <!-- 1. HEADER SECTION -->
+    <header class="console-header">
+      <div class="brand-section">
+        <div class="brand-logo-badge" title="RespiTrack Physiological Breathing Monitor">
+          <svg viewBox="0 0 24 24">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>RespiTrack // Breathing Pattern Acquisition</h1>
+          <p>Vernier Go Direct&reg; Respiration Belt USB Telemetry &bull; 10 Hz Waveform Logger &bull; Data Export</p>
+        </div>
+      </div>
+
+      <div class="status-badge-group">
+        <!-- Hardware Link Status -->
+        <div id="hw-status-badge" class="status-pill disconnected">
+          <span class="status-indicator-dot"></span>
+          <span id="hw-status-text">INITIALIZING SENSOR...</span>
+        </div>
+
+        <!-- Real-Time Stream Status -->
+        <div id="sensor-status-badge" class="status-pill">
+          <span class="status-indicator-dot"></span>
+          <span id="sensor-status-text">SENSOR STANDBY</span>
+        </div>
+
+        <!-- WebSocket Server Link -->
+        <div id="socket-status-badge" class="status-pill">
+          <span class="status-indicator-dot"></span>
+          <span id="socket-status-text">CONNECTING...</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. BREATHING PATTERN CLASSIFICATION & ASSESSMENT BANNER -->
+    <section id="diagnostic-summary-card" class="diagnostic-summary-card diag-standby"
+      aria-label="Breathing Pattern Assessment">
+      <div class="diag-main-row">
+        <div class="diag-left-content">
+          <div class="diag-icon-wrapper" id="diag-icon-wrapper">
+            <svg id="diag-status-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+          </div>
+          <div class="diag-text-block">
+            <div class="diag-eyebrow-row">
+              <span id="diag-badge" class="diag-badge-status">STANDBY</span>
+              <span class="diag-timestamp-label">Continuous 10 Hz Belt Analysis</span>
+            </div>
+            <div id="diag-headline" class="diag-headline">Vernier Belt Ready — Awaiting Recording</div>
+            <div id="diag-description" class="diag-description">
+              The Vernier Go Direct Respiration Belt is connected over USB. Click <strong>Start Recording</strong> to
+              capture live breathing kinematics and chest excursion data.
+            </div>
+          </div>
+        </div>
+
+        <!-- Breakdown Chips -->
+        <div class="diag-breakdown-chips">
+          <div class="diag-chip-item">
+            <span class="diag-chip-title">Breathing Rate</span>
+            <span id="diag-chip-rate" class="diag-chip-value">-- BPM</span>
+          </div>
+          <div class="diag-chip-item">
+            <span class="diag-chip-title">Tidal Excursion</span>
+            <span id="diag-chip-depth" class="diag-chip-value">-- N</span>
+          </div>
+          <div class="diag-chip-item">
+            <span class="diag-chip-title">Rhythm Regularity</span>
+            <span id="diag-chip-regularity" class="diag-chip-value">Standby</span>
+          </div>
+          <div class="diag-chip-item">
+            <span class="diag-chip-title">Pattern Class</span>
+            <span id="diag-chip-suitability" class="diag-chip-value">Standby</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. MAIN DASHBOARD SPLIT -->
+    <div class="dashboard-grid">
+
+      <!-- LEFT: CONTROLS, RECORDING & CALIBRATION -->
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+
+        <!-- 3A. RECORDING & SESSION DOWNLOAD (PRIMARY HERO PANEL) -->
+        <section class="panel-card" aria-label="Session Recording & Data Export">
+          <div class="panel-header">
+            <div class="panel-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <circle cx="12" cy="12" r="3" fill="currentColor"></circle>
+              </svg>
+              <span>Breathing Pattern Session Logger</span>
+            </div>
+            <span class="badge-subtle">CSV / JSON Export</span>
+          </div>
+
+          <!-- Hero Start / Stop Action Buttons -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <button id="btn-start-sensor" class="btn btn-record-start" onclick="startSensor()"
+              title="Start capturing and recording breathing data">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polygon points="5 3 19 12 5 21 5 3" fill="currentColor"></polygon>
+              </svg>
+              <span>Start Recording</span>
+            </button>
+
+            <button id="btn-stop-sensor" class="btn btn-record-stop" onclick="stopSensor()" disabled
+              title="Pause / Stop recording session">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="6" y="6" width="12" height="12" fill="currentColor"></rect>
+              </svg>
+              <span>Stop Recording</span>
+            </button>
+          </div>
+
+          <!-- Live Recording Status & Counters -->
+          <div class="recording-session-box">
+            <div class="rec-top-row">
+              <div class="rec-status-chip">
+                <span id="rec-status-dot" class="rec-idle-dot"></span>
+                <span id="rec-status-text">SESSION BUFFER IDLE</span>
+              </div>
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono);">
+                Rate: 10.0 Hz
+              </span>
+            </div>
+
+            <div class="rec-stats-row">
+              <div class="rec-stat-col">
+                <span class="rec-stat-label">Elapsed Time</span>
+                <span id="rec-duration" class="rec-stat-val">00:00</span>
+              </div>
+              <div class="rec-stat-col">
+                <span class="rec-stat-label">Samples Logged</span>
+                <span id="rec-count" class="rec-stat-val">0</span>
+              </div>
+              <div class="rec-stat-col">
+                <span class="rec-stat-label">Breaths Detected</span>
+                <span id="rec-breaths" class="rec-stat-val">0</span>
+              </div>
+            </div>
+
+            <!-- Download Actions -->
+            <div class="download-btn-row" style="grid-template-columns: 1.4fr 1.1fr 0.8fr 0.8fr;">
+              <button id="btn-download-summary" class="btn btn-download-primary" onclick="downloadPhysicalSummaryCSV()"
+                disabled title="Download clean human-readable breath-by-breath table in CSV">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                  <line x1="16" y1="13" x2="8" y2="13"></line>
+                  <line x1="16" y1="17" x2="8" y2="17"></line>
+                  <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <span>Summary CSV</span>
+              </button>
+
+              <button id="btn-download-csv" class="btn btn-download-secondary" onclick="downloadSessionCSV()" disabled
+                title="Download raw 10 Hz time-series CSV">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Raw 10Hz</span>
+              </button>
+
+              <button id="btn-download-json" class="btn btn-download-secondary" onclick="downloadSessionJSON()" disabled
+                title="Download structured JSON file">
+                JSON
+              </button>
+
+              <button id="btn-clear-rec" class="btn btn-clear-data" onclick="clearSessionRecording()"
+                title="Reset session samples and breath counter">
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <!-- Workflow Instructions -->
+          <div class="tare-guide-box">
+            <strong>Breathing Collection Guide:</strong>
+            <ol style="margin-left: 18px; margin-top: 4px; display: flex; flex-direction: column; gap: 4px;">
+              <li>Fasten belt comfortably around your lower chest/rib cage.</li>
+              <li>Exhale naturally to empty lungs, then click <strong>Tare / Zero Baseline</strong>.</li>
+              <li>Click <strong>Start Recording</strong> and breathe normally.</li>
+              <li>Click <strong>Stop</strong> and <strong>Download CSV</strong> when your session is complete.</li>
+            </ol>
+          </div>
+        </section>
+
+        <!-- 3B. HARDWARE STATUS & TRANSDUCER CALIBRATION -->
+        <section class="panel-card" aria-label="Hardware & Calibration">
+          <div class="panel-header">
+            <div class="panel-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                <line x1="6" y1="18" x2="6.01" y2="18"></line>
+              </svg>
+              <span>Vernier Belt Hardware &amp; Zeroing</span>
+            </div>
+            <span id="hw-order-code" class="badge-subtle">GDX-RB</span>
+          </div>
+
+          <!-- Device Information Line -->
+          <div
+            style="display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; background: rgba(0, 0, 0, 0.25); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+            <div>
+              <span id="hw-device-name" style="font-weight: 600; color: #f1f5f9;">Go Direct&reg; Respiration Belt</span>
+              <span style="color: var(--text-muted); margin-left: 6px;">(S/N: <strong
+                  id="hw-serial">0K7014Z0</strong>)</span>
+            </div>
+            <span style="color: var(--status-active); font-family: var(--font-mono); font-size: 0.75rem;">USB HID 10
+              Hz</span>
+          </div>
+
+          <!-- Force Balance Readout -->
+          <div class="force-balance-grid">
+            <div class="force-col">
+              <span class="force-col-label">Raw Transducer</span>
+              <span id="force-raw-val" class="force-col-val">0.000 N</span>
+            </div>
+            <div class="force-col">
+              <span class="force-col-label">Tare Baseline</span>
+              <span id="force-tare-val" class="force-col-val">0.000 N</span>
+            </div>
+            <div class="force-col highlight">
+              <span class="force-col-label">Net Chest Excursion</span>
+              <span id="force-net-val" class="force-col-val">0.00 N</span>
+            </div>
+          </div>
+
+          <!-- Direct Browser Hardware Link (Vercel & WebHID Ready) -->
+          <div style="background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.25); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 0.76rem; font-weight: 700; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                Direct Browser Link (Vercel &amp; Cloud Ready)
+              </span>
+              <span id="conn-mode-badge" style="font-size: 0.68rem; font-family: var(--font-mono); padding: 2px 8px; border-radius: 4px; background: rgba(0,0,0,0.5); color: var(--text-muted); border: 1px solid var(--border-subtle);">
+                STANDBY
+              </span>
+            </div>
+            <p style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.35;">
+              Connect your Vernier belt directly in Chrome or Edge over USB or Bluetooth. No local Python server needed on Vercel!
+            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <button id="btn-connect-usb" class="btn-connect-usb" onclick="connectBrowserBelt(false)" title="Connect Vernier Go Direct belt over USB via WebHID in Chrome">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M12 2v10m0 0l-3-3m3 3l3-3M5 12h14v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7z"/>
+                </svg>
+                <span>Connect USB</span>
+              </button>
+              <button id="btn-connect-ble" class="btn-connect-ble" onclick="connectBrowserBelt(true)" title="Connect Vernier Go Direct belt wirelessly over Bluetooth in Chrome">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/>
+                </svg>
+                <span>Connect BLE</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Calibration & Hardware Management -->
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px;">
+            <button id="btn-tare-sensor" class="btn btn-tare" onclick="tareSensor()"
+              title="Zeroes resting strap tension at end-expiration">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="16"></line>
+                <line x1="8" y1="12" x2="16" y2="12"></line>
+              </svg>
+              <span>Tare / Zero Baseline</span>
+            </button>
+
+            <button id="btn-reconnect-hw" class="btn btn-disconnect-hw" onclick="disconnectOrRescanHardware()"
+              title="Disconnects active browser belt or rescans local USB">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+              </svg>
+              <span id="btn-rescan-text">Rescan / Demo</span>
+            </button>
+          </div>
+        </section>
+
+      </div><!-- /Left Column -->
+
+      <!-- RIGHT: LIVE TELEMETRY & OSCILLOSCOPE -->
+      <div style="display: flex; flex-direction: column; gap: 20px;">
+
+        <!-- 3C. REAL-TIME TELEMETRY HUD -->
+        <section class="panel-card" style="padding-bottom: 18px;" aria-label="Real-time Respiratory Telemetry">
+          <div class="panel-header">
+            <div class="panel-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+              <span>Real-Time Breathing Telemetry</span>
+            </div>
+            <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted);">
+              Packets: <span id="stat-packet-count">0</span>
+            </span>
+          </div>
+
+          <!-- Live Numerical Telemetry HUD Cards -->
+          <div class="live-hud-grid">
+            <!-- Chest Expansion Force -->
+            <div class="hud-card expansion-card">
+              <div class="hud-label">
+                <span>Expansion Force</span>
+                <span style="color: var(--accent-cyan); font-family: var(--font-mono);">LIVE</span>
+              </div>
+              <div class="hud-main-val">
+                <span id="hud-disp-val">0.00</span>
+                <span class="hud-unit">N</span>
+              </div>
+              <div class="hud-sub-val" id="hud-delta-val">&plusmn;0.00 N/s</div>
+            </div>
+
+            <!-- Respiratory Phase -->
+            <div class="hud-card">
+              <div class="hud-label">
+                <span>Breathing Phase</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+              </div>
+              <div style="margin-top: 4px;">
+                <span id="hud-phase-val" class="phase-badge">Standby</span>
+              </div>
+              <div class="hud-sub-val" style="margin-top: 6px;">Vector: <span id="hud-motion-dir">Quiescent</span></div>
+            </div>
+
+            <!-- Respiration Rate -->
+            <div class="hud-card">
+              <div class="hud-label">
+                <span>Breathing Rate</span>
+                <span>Normal: 12-18</span>
+              </div>
+              <div class="hud-main-val">
+                <span id="hud-rate-val">--</span>
+                <span class="hud-unit">BPM</span>
+              </div>
+              <div class="hud-sub-val">Period: <span id="hud-period-val">--</span> s/breath</div>
+            </div>
+
+            <!-- Tidal Excursion Range -->
+            <div class="hud-card">
+              <div class="hud-label">
+                <span>Tidal Amplitude</span>
+                <span>Rolling 15s</span>
+              </div>
+              <div class="hud-main-val">
+                <span id="hud-range-val">0.0</span>
+                <span class="hud-unit">N</span>
+              </div>
+              <div class="hud-sub-val">Min: <span id="hud-min-val">0.0</span> N | Max: <span id="hud-max-val">0.0</span>
+                N</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3D. BREATHING PATTERN OSCILLOSCOPE (FULL WAVEFORM) -->
+        <section class="panel-card" aria-label="Breathing Waveform Oscilloscope">
+          <div class="panel-header">
+            <div class="panel-title">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+              <span>Breathing Pattern Oscilloscope (10 Hz)</span>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button id="btn-header-csv" class="btn btn-download-primary"
+                style="padding: 5px 12px; font-size: 0.75rem;" onclick="downloadSessionCSV()" disabled
+                title="Download recorded session in CSV">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span>Download CSV</span>
+              </button>
+              <button class="btn btn-rescan" style="padding: 5px 12px; font-size: 0.75rem;" onclick="resetWaveform()">
+                Reset View
+              </button>
+            </div>
+          </div>
+
+          <div class="chart-container-card">
+            <div class="chart-header">
+              <div class="chart-legend-custom">
+                <div class="legend-item">
+                  <div class="legend-line-cyan"></div>
+                  <span>Chest Expansion Waveform (Newtons)</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-dot-red"></div>
+                  <span>Detected Inhalation Peaks</span>
+                </div>
+              </div>
+              <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted);">
+                Window: 12.0s (120 points at 10 Hz)
+              </span>
+            </div>
+
+            <div class="chart-canvas-wrapper">
+              <canvas id="respiratoryChart"></canvas>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /Right Column -->
+
+    </div><!-- /dashboard-grid -->
+
+    <!-- 4. PHYSICAL BREATH-BY-BREATH CYCLE TELEMETRY -->
+    <section class="panel-card" aria-label="Physical Breath-by-Breath Table">
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="3" y1="15" x2="21" y2="15"></line>
+            <line x1="9" y1="3" x2="9" y2="21"></line>
+          </svg>
+          <span>Physical Breath-by-Breath Summary Table</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span id="summary-badge-count" class="badge-subtle">0 Breaths Analyzed</span>
+          <button id="btn-table-download-csv" class="btn btn-download-primary"
+            style="padding: 5px 12px; font-size: 0.75rem;" onclick="downloadPhysicalSummaryCSV()" disabled
+            title="Download breath-by-breath table as CSV">
+            Download Physical Summary (CSV)
+          </button>
+          <button class="btn btn-rescan" style="padding: 5px 12px; font-size: 0.75rem;" onclick="loadBreathSummary()"
+            title="Recompute breath cycle breakdown">
+            Refresh Table
+          </button>
+        </div>
+      </div>
+
+      <div class="physical-table-wrapper">
+        <table class="physical-table">
+          <thead>
+            <tr>
+              <th>Breath #</th>
+              <th>Clock Window</th>
+              <th>Elapsed Window</th>
+              <th>Cycle Duration (T)</th>
+              <th>Breath Rate (BPM)</th>
+              <th>Inhale (Ti)</th>
+              <th>Exhale (Te)</th>
+              <th>I:E Ratio</th>
+              <th>Resting Base</th>
+              <th>Peak Inhale</th>
+              <th>Net Excursion</th>
+              <th>Physical Classification</th>
+            </tr>
+          </thead>
+          <tbody id="breath-table-body">
+            <tr>
+              <td colspan="12" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                No completed breath cycles analyzed yet. Complete a recording session to view the physical breakdown.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <div><strong>RespiTrack Breathing Pattern Acquisition</strong> &bull; Vernier Go Direct&reg; Respiration Belt USB
+        Integration</div>
+      <div>10 Hz Transducer Stream &bull; Session Data Export (CSV &amp; JSON) &bull; Device S/N: <span
+          id="footer-serial">0K7014Z0</span></div>
+    </footer>
+
+  </div>
+
+  <!-- Client-side Logic -->
+  <script>
+    let socket = null;
+    let isSensorStreaming = false;
+    let isHardwareConnected = false;
+
+    let totalPacketsReceived = 0;
+    let lastSensorValue = 0;
+    let sessionStartTime = null;
+    let uptimeIntervalId = null;
+
+    // Session Data Recording Buffer
+    let recordedSessionData = [];
+
+    const MAX_CHART_SAMPLES = 120; // 12s at 10 Hz
+    let chartLabels = [];
+    let chartSignalData = [];
+    let chartInstance = null;
+    let recentValues = [];
+
+    // Current physiological metrics for diagnostics
+    let currentBpm = 14.0;
+    let currentAmplitude = 2.5;
+    let currentNoise = 0.05;
+    let currentBreathCount = 0;
+
+    // --- Chart.js Setup ---
+    function initChart() {
+      const ctx = document.getElementById("respiratoryChart").getContext("2d");
+      const gradient = ctx.createLinearGradient(0, 0, 0, 320);
+      gradient.addColorStop(0, "rgba(6, 182, 212, 0.45)");
+      gradient.addColorStop(0.7, "rgba(6, 182, 212, 0.08)");
+      gradient.addColorStop(1, "rgba(6, 182, 212, 0.0)");
+
+      for (let i = 0; i < MAX_CHART_SAMPLES; i++) {
+        chartLabels.push("");
+        chartSignalData.push(null);
+      }
+
+      chartInstance = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels: chartLabels,
+          datasets: [
+            {
+              label: "Chest Expansion (N)",
+              data: chartSignalData,
+              borderColor: "#06b6d4",
+              borderWidth: 2.8,
+              backgroundColor: gradient,
+              fill: true,
+              pointRadius: 0,
+              tension: 0.35,
+              cubicInterpolationMode: "monotone"
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          interaction: { intersect: false, mode: "index" },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              enabled: true,
+              callbacks: {
+                label: (ctx) => `Expansion Force: ${ctx.parsed.y.toFixed(2)} N`
+              }
+            }
+          },
+          scales: {
+            x: {
+              display: true,
+              grid: { color: "rgba(255, 255, 255, 0.04)" },
+              ticks: { display: false }
+            },
+            y: {
+              min: 0,
+              max: 5.0,
+              grid: { color: "rgba(255, 255, 255, 0.07)" },
+              ticks: {
+                color: "#64748b",
+                font: { family: "'JetBrains Mono', monospace", size: 11 },
+                callback: (v) => v.toFixed(1) + " N"
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // =======================================================
+    // REAL-TIME BREATHING PATTERN ASSESSMENT
+    // =======================================================
+    function evaluateBreathingDiagnostics(bpm, amp, noise) {
+      const card = document.getElementById("diagnostic-summary-card");
+      const badge = document.getElementById("diag-badge");
+      const headline = document.getElementById("diag-headline");
+      const desc = document.getElementById("diag-description");
+      const svgBox = document.getElementById("diag-status-svg");
+
+      const chipRate = document.getElementById("diag-chip-rate");
+      const chipDepth = document.getElementById("diag-chip-depth");
+      const chipReg = document.getElementById("diag-chip-regularity");
+      const chipSuit = document.getElementById("diag-chip-suitability");
+
+      if (!isSensorStreaming) {
+        card.className = "diagnostic-summary-card diag-standby";
+        badge.innerText = "STANDBY";
+        headline.innerText = isHardwareConnected ? "Vernier Belt Ready — Awaiting Recording" : "Searching for Vernier USB Belt...";
+        desc.innerText = isHardwareConnected
+          ? "The Vernier Go Direct Respiration Belt is connected over USB. Click Start Recording to begin capturing breathing data."
+          : "Plug the Vernier Go Direct Respiration Belt into a USB port on this computer, then click Rescan USB.";
+        chipRate.innerText = "-- BPM";
+        chipDepth.innerText = "-- N";
+        chipReg.innerText = "Standby";
+        chipSuit.innerText = isHardwareConnected ? "Hardware Online" : "Hardware Offline";
+        svgBox.innerHTML = `
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+        `;
+        return;
+      }
+
+      let abnormalities = [];
+
+      // 1. Respiration Rate Checks
+      let rateClassText = "Normal Eupnea";
+      if (bpm > 20.0) {
+        rateClassText = "Tachypnea (> 20 BPM)";
+        abnormalities.push({
+          title: "Tachypnea / Rapid Breathing (> 20 BPM)",
+          desc: `Elevated respiration rate (${bpm.toFixed(1)} BPM) recorded from the physical belt. Breathing frequency is above typical resting adult rates (12-18 BPM).`,
+          level: "warn"
+        });
+      } else if (bpm > 0 && bpm < 10.0) {
+        rateClassText = "Bradypnea (< 10 BPM)";
+        abnormalities.push({
+          title: "Bradypnea / Slow Breathing (< 10 BPM)",
+          desc: `Slow breathing frequency (${bpm.toFixed(1)} BPM) with extended cycle period (${(60 / bpm).toFixed(1)} s per breath).`,
+          level: "warn"
+        });
+      }
+
+      // 2. Amplitude / Tidal Tension Excursion Checks
+      let depthClassText = "Optimal (Normal)";
+      if (amp > 5.5) {
+        depthClassText = "Hyperpnea / Deep (> 5.5 N)";
+        abnormalities.push({
+          title: "Deep Thoracic Expansion / Hyperpnea (> 5.5 N)",
+          desc: `Substantial chest expansion (${amp.toFixed(1)} N excursion) indicating deep or labored breathing cycles.`,
+          level: "info"
+        });
+      } else if (amp < 0.6) {
+        depthClassText = "Very Shallow (< 0.6 N)";
+        abnormalities.push({
+          title: "Shallow Breathing / Loose Belt (< 0.6 N)",
+          desc: `Very low chest excursion tension (${amp.toFixed(2)} N). If you are breathing normally, snug the elastic belt strap slightly or click Tare / Zero Baseline at exhalation.`,
+          level: "warn"
+        });
+      }
+
+      // 3. Noise / Tremor Checks
+      let regText = "Steady Rhythm";
+      if (noise > 0.25) {
+        regText = "High Tremor / Motion";
+        abnormalities.push({
+          title: "Motion Artifact / Muscle Tremor Detected",
+          desc: `High-frequency tension fluctuation (${noise.toFixed(3)} N ripple). Ensure you are seated comfortably without shivering or body movement.`,
+          level: "warn"
+        });
+      } else if (noise > 0.12) {
+        regText = "Mild Variation";
+      }
+
+      // Update Breakdown Chips
+      chipRate.innerText = `${bpm.toFixed(1)} BPM (${rateClassText})`;
+      chipDepth.innerText = `${amp.toFixed(2)} N (${depthClassText})`;
+      chipReg.innerText = regText;
+
+      // Determine overall diagnosis
+      if (abnormalities.length === 0) {
+        card.className = "diagnostic-summary-card diag-normal";
+        badge.innerText = "EUPNEA (STABLE RHYTHM)";
+        headline.innerText = "Normal Resting Respiratory Pattern";
+        desc.innerText = `Physical belt is recording clean, reproducible breathing waveforms (${bpm.toFixed(1)} BPM, ${amp.toFixed(2)} N excursion) with smooth end-expiration and end-inspiration transitions.`;
+        chipSuit.innerText = "NORMAL EUPNEA";
+        chipSuit.style.color = "var(--status-active)";
+
+        svgBox.innerHTML = `
+          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+          <polyline points="22 4 12 14.01 9 11.01" />
+        `;
+      } else {
+        const dominant = abnormalities[0];
+        card.className = "diagnostic-summary-card diag-abnormal-warn";
+        badge.innerText = "PATTERN: " + dominant.title.split(" ")[0].toUpperCase();
+        chipSuit.innerText = dominant.title.split(" ")[0];
+        chipSuit.style.color = "var(--status-warn)";
+        svgBox.innerHTML = `
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        `;
+
+        headline.innerText = dominant.title;
+        let combinedDesc = dominant.desc;
+        if (abnormalities.length > 1) {
+          combinedDesc += " Also observed: " + abnormalities.slice(1).map(a => a.title).join("; ") + ".";
+        }
+        desc.innerText = combinedDesc;
+      }
+    }
+
+    // --- Socket.IO Client Connection & Cloud Fallback ---
+    let activeConnectionMode = "idle"; // 'browser-hid', 'browser-ble', 'socket', 'replay'
+    let cachedDemoSamples = [];
+    let cloudPlaybackInterval = null;
+    let cloudPlaybackIndex = 0;
+
+    async function checkVercelOrCloudMode() {
+      const socketStatusBadge = document.getElementById("socket-status-badge");
+      const socketStatusText = document.getElementById("socket-status-text");
+      if (socketStatusBadge && (!socket || !socket.connected)) {
+        socketStatusBadge.className = "status-pill";
+        socketStatusText.innerText = "CLOUD / BROWSER MODE";
+      }
+
+      const connBadge = document.getElementById("conn-mode-badge");
+      if (connBadge && activeConnectionMode === "idle") {
+        connBadge.innerText = "VERCEL READY";
+        connBadge.style.color = "var(--accent-cyan)";
+      }
+
+      // Check REST API for hardware status if running on Vercel
+      try {
+        const res = await fetch("/api/status");
+        if (res.ok) {
+          const status = await res.json();
+          if (status.serial_number && status.serial_number !== "Unknown") {
+            document.getElementById("hw-serial").innerText = status.serial_number;
+            document.getElementById("footer-serial").innerText = status.serial_number;
+          }
+          if (status.tare_offset !== undefined) {
+            document.getElementById("force-tare-val").innerText = status.tare_offset.toFixed(3) + " N";
+          }
+        }
+      } catch (e) {}
+
+      // Pre-load session data for instant breath summary and demo replay
+      if (cachedDemoSamples.length === 0) {
+        try {
+          const res = await fetch("/static/session_data.json");
+          if (res.ok) {
+            const data = await res.json();
+            cachedDemoSamples = data.samples || [];
+            if (cachedDemoSamples.length > 0 && recordedSessionData.length === 0) {
+              recordedSessionData = cachedDemoSamples;
+              updateRecordedCounters();
+              loadBreathSummary();
+            }
+          }
+        } catch (e) {
+          try {
+            const res2 = await fetch("/api/session-samples");
+            if (res2.ok) {
+              const data2 = await res2.json();
+              cachedDemoSamples = data2.samples || [];
+              if (cachedDemoSamples.length > 0 && recordedSessionData.length === 0) {
+                recordedSessionData = cachedDemoSamples;
+                updateRecordedCounters();
+                loadBreathSummary();
+              }
+            }
+          } catch (e2) {}
+        }
+      }
+    }
+
+    function initSocketConnection() {
+      const socketStatusBadge = document.getElementById("socket-status-badge");
+      const socketStatusText = document.getElementById("socket-status-text");
+
+      try {
+        socket = io({
+          timeout: 2500,
+          reconnectionAttempts: 2
+        });
+
+        socket.on("connect", () => {
+          socketStatusBadge.className = "status-pill connected";
+          socketStatusText.innerText = "WEBSOCKET ONLINE";
+          activeConnectionMode = "socket";
+          const connBadge = document.getElementById("conn-mode-badge");
+          if (connBadge) {
+            connBadge.innerText = "LOCAL PYTHON";
+            connBadge.style.color = "var(--status-active)";
+          }
+        });
+
+        socket.on("disconnect", () => {
+          if (activeConnectionMode === "socket") {
+            socketStatusBadge.className = "status-pill disconnected";
+            socketStatusText.innerText = "WEBSOCKET OFFLINE";
+            updateSensorActiveUI(false);
+          }
+        });
+
+        socket.on("connect_error", () => {
+          socketStatusBadge.className = "status-pill";
+          socketStatusText.innerText = "CLOUD / BROWSER MODE";
+          checkVercelOrCloudMode();
+        });
+
+        socket.on("sensor_status", (status) => {
+          // If browser device is active, let browser device take precedence
+          if (browserGdxDevice && browserGdxDevice.opened) return;
+
+          isHardwareConnected = status.connected;
+          const hwBadge = document.getElementById("hw-status-badge");
+          const hwText = document.getElementById("hw-status-text");
+
+          if (status.connected) {
+            hwBadge.className = "status-pill connected";
+            hwText.innerText = `VERNIER ${status.order_code || 'GDX-RB'} ONLINE`;
+            document.getElementById("hw-device-name").innerText = status.device_name || "Vernier Go Direct Respiration Belt";
+            document.getElementById("hw-order-code").innerText = status.order_code || "GDX-RB";
+            const sn = status.serial_number || "0K7014Z0";
+            document.getElementById("hw-serial").innerText = sn;
+            document.getElementById("footer-serial").innerText = sn;
+          } else {
+            hwBadge.className = "status-pill disconnected";
+            hwText.innerText = "SENSOR DISCONNECTED";
+          }
+
+          updateSensorActiveUI(status.active);
+          currentBpm = status.bpm || 14.0;
+          currentAmplitude = status.amplitude || 2.5;
+          currentNoise = status.noise_level || 0.05;
+          if (status.breath_count !== undefined) {
+            currentBreathCount = status.breath_count;
+            document.getElementById("rec-breaths").innerText = currentBreathCount;
+          }
+
+          if (status.tare_offset !== undefined) {
+            document.getElementById("force-tare-val").innerText = status.tare_offset.toFixed(3) + " N";
+          }
+
+          evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
+        });
+
+        socket.on("respiratory_data", (data) => {
+          if (browserGdxDevice && browserGdxDevice.opened) return;
+          processIncomingSample(data);
+        });
+      } catch (e) {
+        checkVercelOrCloudMode();
+      }
+
+      // Safety fallback check for serverless environments where WebSocket never connects
+      setTimeout(() => {
+        if (!socket || !socket.connected) {
+          checkVercelOrCloudMode();
+        }
+      }, 2000);
+    }
+
+    function processIncomingSample(data) {
+      totalPacketsReceived++;
+      document.getElementById("stat-packet-count").innerText = totalPacketsReceived.toLocaleString();
+
+      const val = data.value;                // Net expansion in Newtons (N)
+      const rawForce = data.raw_force;      // Raw transducer force in N
+      const tareOffset = data.tare_offset;
+      const timeStr = data.time_str;
+      const bpm = data.bpm;
+      const phase = data.phase;
+      const breaths = data.breath_count || 0;
+
+      // Update cached parameters
+      currentBpm = bpm;
+      if (data.amplitude) currentAmplitude = data.amplitude;
+      if (data.noise_level) currentNoise = data.noise_level;
+      currentBreathCount = breaths;
+
+      // Update force balance stats
+      document.getElementById("force-raw-val").innerText = rawForce.toFixed(3) + " N";
+      document.getElementById("force-tare-val").innerText = tareOffset.toFixed(3) + " N";
+      document.getElementById("force-net-val").innerText = val.toFixed(2) + " N";
+      document.getElementById("rec-breaths").innerText = breaths;
+
+      // Record sample in client-side session buffer
+      recordSample(data);
+
+      // Live Telemetry Readout
+      document.getElementById("hud-disp-val").innerText = val.toFixed(2);
+
+      const delta = (val - lastSensorValue) * 10.0;
+      document.getElementById("hud-delta-val").innerText = (delta >= 0 ? "+" : "") + delta.toFixed(2) + " N/s";
+      lastSensorValue = val;
+
+      const motionDirEl = document.getElementById("hud-motion-dir");
+      if (delta > 0.08) motionDirEl.innerText = "Inhaling ↑";
+      else if (delta < -0.08) motionDirEl.innerText = "Exhaling ↓";
+      else motionDirEl.innerText = "Plateau ↔";
+
+      document.getElementById("hud-phase-val").innerText = phase;
+      document.getElementById("hud-rate-val").innerText = bpm > 0 ? bpm.toFixed(1) : "--";
+      document.getElementById("hud-period-val").innerText = bpm > 0 ? (60.0 / bpm).toFixed(2) : "--";
+
+      recentValues.push(val);
+      if (recentValues.length > 150) recentValues.shift();
+      const minVal = Math.min(...recentValues);
+      const maxVal = Math.max(...recentValues);
+      document.getElementById("hud-min-val").innerText = minVal.toFixed(1);
+      document.getElementById("hud-max-val").innerText = maxVal.toFixed(1);
+      document.getElementById("hud-range-val").innerText = (maxVal - minVal).toFixed(1);
+
+      // Dynamic Y-axis scaling for chart
+      if (chartInstance) {
+        const requiredMax = Math.max(4.0, Math.ceil(maxVal + 1.2));
+        if (chartInstance.options.scales.y.max !== requiredMax) {
+          chartInstance.options.scales.y.max = requiredMax;
+        }
+      }
+
+      // Chart Update
+      chartLabels.shift();
+      chartLabels.push(timeStr);
+      chartSignalData.shift();
+      chartSignalData.push(val);
+
+      if (chartInstance) chartInstance.update("none");
+
+      // Periodically update diagnostic assessment (every 10 ticks = 1 second)
+      if (totalPacketsReceived % 10 === 0) {
+        evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
+      }
+    }
+
+    function recordSample(data) {
+      const item = {
+        sample_index: data.sample_count,
+        timestamp_iso: new Date().toISOString(),
+        time_str: data.time_str,
+        elapsed_seconds: data.timestamp,
+        raw_force_n: data.raw_force,
+        tare_offset_n: data.tare_offset,
+        net_expansion_n: data.value,
+        respiration_rate_bpm: data.bpm,
+        phase: data.phase,
+        breath_count: data.breath_count || currentBreathCount
+      };
+      recordedSessionData.push(item);
+      updateRecordedCounters();
+    }
+
+    function updateRecordedCounters() {
+      const count = recordedSessionData.length;
+      const sec = (count * 0.1).toFixed(1);
+      const elCount = document.getElementById("rec-count");
+      const elDur = document.getElementById("rec-duration");
+      if (elCount) elCount.innerText = count.toLocaleString();
+      if (elDur) {
+        const m = String(Math.floor(count * 0.1 / 60)).padStart(2, "0");
+        const s = String(Math.floor((count * 0.1) % 60)).padStart(2, "0");
+        elDur.innerText = `${m}:${s}`;
+      }
+
+      const btnSummary = document.getElementById("btn-download-summary");
+      const btnTableCsv = document.getElementById("btn-table-download-csv");
+      const btnCsv = document.getElementById("btn-download-csv");
+      const btnHeaderCsv = document.getElementById("btn-header-csv");
+      const btnJson = document.getElementById("btn-download-json");
+      const isEnabled = (count > 0);
+
+      if (btnSummary) btnSummary.disabled = !isEnabled;
+      if (btnTableCsv) btnTableCsv.disabled = !isEnabled;
+      if (btnCsv) btnCsv.disabled = !isEnabled;
+      if (btnHeaderCsv) btnHeaderCsv.disabled = !isEnabled;
+      if (btnJson) btnJson.disabled = !isEnabled;
+    }
+
+    function downloadPhysicalSummaryCSV() {
+      window.location.href = "/api/export/summary-csv";
+    }
+
+    async function loadBreathSummary() {
+      try {
+        const res = await fetch("/api/export/summary-json");
+        if (!res.ok) return;
+        const data = await res.json();
+        renderBreathTable(data.cycles || []);
+      } catch (e) {
+        console.error("Error loading breath summary:", e);
+      }
+    }
+
+    function renderBreathTable(cycles) {
+      const tbody = document.getElementById("breath-table-body");
+      const badgeCount = document.getElementById("summary-badge-count");
+      if (badgeCount) {
+        badgeCount.innerText = `${cycles.length} Breaths Analyzed`;
+      }
+      const btnTableCsv = document.getElementById("btn-table-download-csv");
+      if (btnTableCsv) {
+        btnTableCsv.disabled = (cycles.length === 0);
+      }
+
+      if (!tbody) return;
+      if (!cycles || cycles.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="12" style="text-align: center; color: var(--text-muted); padding: 24px;">
+              No completed breath cycles analyzed yet. Complete a recording session to view the physical breakdown.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      let html = "";
+      cycles.forEach((c) => {
+        let badgeClass = "eupnea";
+        const clsLower = (c.classification || "").toLowerCase();
+        if (clsLower.includes("sigh")) badgeClass = "sigh";
+        else if (clsLower.includes("deep")) badgeClass = "deep";
+        else if (clsLower.includes("pause") || clsLower.includes("hold")) badgeClass = "pause";
+        else if (clsLower.includes("rapid") || clsLower.includes("catch-up")) badgeClass = "rapid";
+        else if (clsLower.includes("shallow")) badgeClass = "shallow";
+
+        html += `
+          <tr>
+            <td class="mono-cell" style="color: #38bdf8; font-weight: 700;">#${c.breath_number}</td>
+            <td class="mono-cell" style="font-size: 0.76rem; color: var(--text-secondary);">${c.start_clock} → ${c.end_clock}</td>
+            <td class="mono-cell">${c.start_time_s.toFixed(1)}s - ${c.end_time_s.toFixed(1)}s</td>
+            <td class="mono-cell" style="color: #f1f5f9; font-weight: 700;">${c.cycle_duration_s.toFixed(1)} s</td>
+            <td class="mono-cell" style="color: ${c.respiration_rate_bpm > 20 ? '#f87171' : c.respiration_rate_bpm < 10 ? '#fbbf24' : '#34d399'}; font-weight: 700;">${c.respiration_rate_bpm.toFixed(1)}</td>
+            <td class="mono-cell">${c.inhale_duration_s.toFixed(1)} s</td>
+            <td class="mono-cell">${c.exhale_duration_s.toFixed(1)} s</td>
+            <td class="mono-cell" style="color: #94a3b8;">${c.ie_ratio}</td>
+            <td class="mono-cell" style="color: #64748b;">${c.baseline_force_n.toFixed(2)} N</td>
+            <td class="mono-cell" style="color: #f8fafc;">${c.peak_force_n.toFixed(2)} N</td>
+            <td class="mono-cell" style="color: #38bdf8; font-weight: 700;">+${c.net_excursion_n.toFixed(2)} N</td>
+            <td><span class="badge-pattern ${badgeClass}">${c.classification}</span></td>
+          </tr>
+        `;
+      });
+      tbody.innerHTML = html;
+    }
+
+    function downloadSessionCSV() {
+      if (recordedSessionData.length === 0) {
+        alert("No session data recorded yet. Click 'Start Recording' to capture physical belt breathing data.");
+        return;
+      }
+
+      const now = new Date();
+      const dateTag = now.toISOString().slice(0, 10).replace(/-/g, "") + "_" +
+        now.toTimeString().slice(0, 8).replace(/:/g, "");
+      const serial = document.getElementById("hw-serial").innerText || "0K7014Z0";
+      const filename = `breathing_pattern_${serial}_${dateTag}.csv`;
+
+      // Compose CSV with metadata headers
+      let csvContent = "# RESPITRACK // Vernier Go Direct Respiration Belt Breathing Pattern Export\n";
+      csvContent += `# Device: Vernier Go Direct Respiration Belt (GDX-RB)\n`;
+      csvContent += `# Serial Number: ${serial}\n`;
+      csvContent += `# Export Timestamp: ${now.toLocaleString()}\n`;
+      csvContent += `# Total Samples: ${recordedSessionData.length}\n`;
+      csvContent += `# Total Breaths Detected: ${currentBreathCount}\n`;
+      csvContent += `# Duration: ${(recordedSessionData.length * 0.1).toFixed(1)} seconds\n`;
+      csvContent += `# Sampling Frequency: 10.0 Hz (100 ms intervals)\n`;
+      csvContent += `# Calibration Formula: Net Expansion Force (N) = max(0, Raw Force - Tare Offset)\n`;
+      csvContent += "#\n";
+      csvContent += "sample_index,timestamp_iso,time_str,elapsed_seconds,raw_force_n,tare_offset_n,net_expansion_n,respiration_rate_bpm,phase,breath_count\n";
+
+      for (const r of recordedSessionData) {
+        csvContent += `${r.sample_index},"${r.timestamp_iso}","${r.time_str}",${r.elapsed_seconds},${r.raw_force_n},${r.tare_offset_n},${r.net_expansion_n},${r.respiration_rate_bpm},"${r.phase}",${r.breath_count}\n`;
+      }
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadSessionJSON() {
+      if (recordedSessionData.length === 0) {
+        alert("No session data recorded yet. Click 'Start Recording' to capture physical belt breathing data.");
+        return;
+      }
+
+      const now = new Date();
+      const dateTag = now.toISOString().slice(0, 10).replace(/-/g, "") + "_" +
+        now.toTimeString().slice(0, 8).replace(/:/g, "");
+      const serial = document.getElementById("hw-serial").innerText || "0K7014Z0";
+      const filename = `breathing_pattern_${serial}_${dateTag}.json`;
+
+      const payload = {
+        system: "RESPITRACK",
+        device: "Vernier Go Direct Respiration Belt",
+        model: "GDX-RB",
+        serial_number: serial,
+        export_timestamp: now.toISOString(),
+        sampling_frequency_hz: 10.0,
+        total_samples: recordedSessionData.length,
+        total_breaths_detected: currentBreathCount,
+        duration_seconds: parseFloat((recordedSessionData.length * 0.1).toFixed(1)),
+        samples: recordedSessionData
+      };
+
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function clearSessionRecording() {
+      if (recordedSessionData.length > 0 && !confirm("Clear all recorded breathing pattern samples?")) {
+        return;
+      }
+      recordedSessionData = [];
+      currentBreathCount = 0;
+      document.getElementById("rec-breaths").innerText = "0";
+      updateRecordedCounters();
+      if (socket && socket.connected) {
+        socket.emit("clear_recording");
+      }
+    }
+
+    // ==========================================
+    // --- Direct Browser Hardware & Cloud Engine ---
+    // ==========================================
+    let browserGdxDevice = null;
+    let browserTareOffset = 0.0;
+    let browserSampleCount = 0;
+    let browserStartTime = null;
+    let lastRawForce = 0.0;
+    let lastBpm = 14.0;
+    let browserBreathCount = 0;
+    let browserPhase = "Exhale";
+    let forceFilterWindow = [];
+    let lastFilteredForce = 0.0;
+    let peakState = "seeking_peak";
+    let lastPeakTime = 0;
+
+    async function connectBrowserBelt(useBluetooth = false) {
+      if (typeof godirect === 'undefined') {
+        alert("Vernier GoDirect browser library is still loading. Please check your internet connection and try again.");
+        return;
+      }
+
+      if (!useBluetooth && !navigator.hid) {
+        alert("WebHID is not supported in this browser.\n\nPlease open this page in Google Chrome, Microsoft Edge, or Opera to connect your USB belt directly.");
+        return;
+      }
+
+      if (useBluetooth && !navigator.bluetooth) {
+        alert("Web Bluetooth is not supported in this browser.\n\nPlease open this page in Google Chrome, Microsoft Edge, or Opera to connect your belt wirelessly.");
+        return;
+      }
+
+      try {
+        // Disconnect existing browser session if any
+        if (browserGdxDevice) {
+          try { await browserGdxDevice.close(); } catch(e) {}
+          browserGdxDevice = null;
+        }
+        if (cloudPlaybackInterval) {
+          stopDemoPlayback();
+        }
+
+        const modeStr = useBluetooth ? "Bluetooth BLE" : "USB HID";
+        console.log(`[WebHID/BLE] Requesting Vernier Go Direct device via ${modeStr}...`);
+
+        // Prompts native browser device chooser
+        const device = await godirect.selectDevice(useBluetooth);
+        if (!device) return;
+
+        browserGdxDevice = device;
+        activeConnectionMode = useBluetooth ? "browser-ble" : "browser-hid";
+        isHardwareConnected = true;
+
+        // Extract metadata
+        const sn = device.serialNumber || "0K7014Z0";
+        const devName = device.name || "Vernier Go Direct Respiration Belt";
+        const orderCode = device.orderCode || "GDX-RB";
+
+        // Update UI Badges
+        const hwBadge = document.getElementById("hw-status-badge");
+        const hwText = document.getElementById("hw-status-text");
+        hwBadge.className = "status-pill connected";
+        hwText.innerText = `VERNIER ${orderCode} (${useBluetooth ? 'BLE' : 'USB'})`;
+
+        const connBadge = document.getElementById("conn-mode-badge");
+        if (connBadge) {
+          connBadge.innerText = useBluetooth ? "BROWSER BLE" : "BROWSER WEBHID";
+          connBadge.style.color = "var(--status-active)";
+        }
+
+        document.getElementById("hw-device-name").innerText = devName;
+        document.getElementById("hw-order-code").innerText = orderCode;
+        document.getElementById("hw-serial").innerText = sn;
+        document.getElementById("footer-serial").innerText = sn;
+        document.getElementById("btn-rescan-text").innerText = "Disconnect";
+
+        // Enable Force (Channel 1) and Respiration Rate (Channel 2)
+        device.sensors.forEach(s => {
+          const nameLower = (s.name || "").toLowerCase();
+          if (nameLower.includes("force") || s.number === 1) s.setEnabled(true);
+          if (nameLower.includes("rate") || nameLower.includes("respiration") || s.number === 2) s.setEnabled(true);
+        });
+
+        // Initialize streaming counters
+        browserStartTime = Date.now();
+        browserSampleCount = 0;
+        browserBreathCount = recordedSessionData.length > 0 ? (recordedSessionData[recordedSessionData.length - 1].breath_count || 0) : 0;
+
+        // Start measurement sampling at 10 Hz (100 ms period)
+        device.start(100);
+        updateSensorActiveUI(true);
+
+        // Attach event listener
+        device.sensors.forEach(sensor => {
+          sensor.on('value-changed', (s) => {
+            handleBrowserSensorReading(s);
+          });
+        });
+
+        console.log(`[WebHID/BLE] Streaming active for ${devName} (${sn}) via ${modeStr}.`);
+      } catch (err) {
+        console.error("Browser device connection failed:", err);
+        if (err.name !== "NotFoundError" && !err.message.includes("cancelled") && !err.message.includes("No device selected")) {
+          alert("Could not connect to Vernier belt: " + err.message);
+        }
+      }
+    }
+
+    function handleBrowserSensorReading(sensor) {
+      const nameLower = (sensor.name || "").toLowerCase();
+
+      // Channel 2: Respiration Rate (BPM)
+      if (nameLower.includes("rate") || nameLower.includes("respiration") || sensor.number === 2) {
+        if (sensor.value && sensor.value > 0) {
+          lastBpm = sensor.value;
+        }
+        return;
+      }
+
+      // Channel 1: Force Transducer (N)
+      if (nameLower.includes("force") || sensor.number === 1) {
+        lastRawForce = sensor.value;
+        browserSampleCount++;
+
+        const elapsed = (Date.now() - (browserStartTime || Date.now())) / 1000.0;
+        const now = new Date();
+        const timeStr = now.toTimeString().slice(0, 8) + "." + Math.floor(now.getMilliseconds() / 100);
+
+        // Net excursion force
+        const netExpansion = Math.max(0, lastRawForce - browserTareOffset);
+
+        // Low-pass filter for smooth motion direction & phase detection
+        forceFilterWindow.push(netExpansion);
+        if (forceFilterWindow.length > 5) forceFilterWindow.shift();
+        const smoothed = forceFilterWindow.reduce((a, b) => a + b, 0) / forceFilterWindow.length;
+        const delta = (smoothed - lastFilteredForce) * 10.0;
+        lastFilteredForce = smoothed;
+
+        if (delta > 0.08) browserPhase = "Inhale";
+        else if (delta < -0.08) browserPhase = "Exhale";
+        else browserPhase = "Plateau";
+
+        // Real-time breath cycle detection
+        if (browserPhase === "Exhale" && peakState === "seeking_peak") {
+          peakState = "seeking_trough";
+          browserBreathCount++;
+          const curTime = Date.now();
+          if (lastPeakTime > 0) {
+            const periodSec = (curTime - lastPeakTime) / 1000.0;
+            if (periodSec >= 1.5 && periodSec <= 15.0) {
+              const instBpm = 60.0 / periodSec;
+              lastBpm = Math.round((lastBpm * 0.7 + instBpm * 0.3) * 10) / 10;
+            }
+          }
+          lastPeakTime = curTime;
+        } else if (browserPhase === "Inhale" && peakState === "seeking_trough") {
+          peakState = "seeking_peak";
+        }
+
+        // Send into high-fidelity oscilloscope & radiation oncology gating pipeline
+        processIncomingSample({
+          timestamp: elapsed,
+          time_str: timeStr,
+          value: netExpansion,
+          raw_force: lastRawForce,
+          tare_offset: browserTareOffset,
+          phase: browserPhase,
+          bpm: lastBpm,
+          sample_count: browserSampleCount,
+          breath_count: browserBreathCount,
+          amplitude: currentAmplitude,
+          noise_level: currentNoise
+        });
+      }
+    }
+
+    async function disconnectOrRescanHardware() {
+      if (browserGdxDevice) {
+        try {
+          await browserGdxDevice.close();
+        } catch(e) {}
+        browserGdxDevice = null;
+        activeConnectionMode = "idle";
+        isHardwareConnected = false;
+        updateSensorActiveUI(false);
+
+        const hwBadge = document.getElementById("hw-status-badge");
+        const hwText = document.getElementById("hw-status-text");
+        hwBadge.className = "status-pill disconnected";
+        hwText.innerText = "SENSOR DISCONNECTED";
+
+        const connBadge = document.getElementById("conn-mode-badge");
+        if (connBadge) {
+          connBadge.innerText = "DISCONNECTED";
+          connBadge.style.color = "var(--text-muted)";
+        }
+        document.getElementById("btn-rescan-text").innerText = "Rescan / Demo";
+        return;
+      }
+
+      if (socket && socket.connected) {
+        socket.emit("reconnect_sensor");
+        return;
+      }
+
+      // If running on Vercel without hardware, toggle authentic session demo playback
+      toggleDemoPlayback();
+    }
+
+    function toggleDemoPlayback() {
+      if (cloudPlaybackInterval) {
+        stopDemoPlayback();
+      } else {
+        startDemoPlayback();
+      }
+    }
+
+    function startDemoPlayback() {
+      if (cloudPlaybackInterval) clearInterval(cloudPlaybackInterval);
+      if (cachedDemoSamples.length === 0) {
+        checkVercelOrCloudMode().then(() => {
+          if (cachedDemoSamples.length > 0) startDemoPlayback();
+        });
+        return;
+      }
+
+      activeConnectionMode = "replay";
+      updateSensorActiveUI(true);
+
+      const connBadge = document.getElementById("conn-mode-badge");
+      if (connBadge) {
+        connBadge.innerText = "DEMO REPLAY (10 Hz)";
+        connBadge.style.color = "var(--accent-amber)";
+      }
+
+      const hwBadge = document.getElementById("hw-status-badge");
+      const hwText = document.getElementById("hw-status-text");
+      hwBadge.className = "status-pill connected";
+      hwText.innerText = "VERNIER 0K7014Z0 REPLAY";
+
+      document.getElementById("btn-rescan-text").innerText = "Stop Demo";
+
+      cloudPlaybackInterval = setInterval(() => {
+        if (cloudPlaybackIndex >= cachedDemoSamples.length) {
+          cloudPlaybackIndex = 0; // loop seamlessly
+        }
+        const sample = cachedDemoSamples[cloudPlaybackIndex];
+        cloudPlaybackIndex++;
+
+        processIncomingSample({
+          timestamp: sample.elapsed_seconds,
+          time_str: sample.time_str,
+          value: sample.net_expansion_n,
+          raw_force: sample.raw_force_n,
+          tare_offset: sample.tare_offset_n,
+          phase: sample.phase,
+          bpm: sample.respiration_rate_bpm,
+          sample_count: sample.sample_index,
+          breath_count: sample.breath_count,
+          amplitude: currentAmplitude,
+          noise_level: currentNoise
+        });
+      }, 100); // 10 Hz
+    }
+
+    function stopDemoPlayback() {
+      if (cloudPlaybackInterval) {
+        clearInterval(cloudPlaybackInterval);
+        cloudPlaybackInterval = null;
+      }
+      activeConnectionMode = "idle";
+      updateSensorActiveUI(false);
+      document.getElementById("btn-rescan-text").innerText = "Rescan / Demo";
+      const connBadge = document.getElementById("conn-mode-badge");
+      if (connBadge) {
+        connBadge.innerText = "STANDBY";
+        connBadge.style.color = "var(--text-muted)";
+      }
+    }
+
+    // Hardware Actions
+    function startSensor() {
+      if (browserGdxDevice && browserGdxDevice.opened) {
+        browserGdxDevice.start(100);
+        updateSensorActiveUI(true);
+        return;
+      }
+      if (socket && socket.connected) {
+        socket.emit("start_sensor");
+        return;
+      }
+      startDemoPlayback();
+    }
+
+    function stopSensor() {
+      if (browserGdxDevice && browserGdxDevice.opened) {
+        browserGdxDevice.stop();
+        updateSensorActiveUI(false);
+        return;
+      }
+      if (socket && socket.connected) {
+        socket.emit("stop_sensor");
+        return;
+      }
+      stopDemoPlayback();
+    }
+
+    function tareSensor() {
+      if (browserGdxDevice && browserGdxDevice.opened) {
+        browserTareOffset = lastRawForce;
+        document.getElementById("force-tare-val").innerText = browserTareOffset.toFixed(3) + " N";
+        return;
+      }
+      if (socket && socket.connected) {
+        socket.emit("tare_sensor");
+        return;
+      }
+      fetch("/api/tare", { method: "POST" })
+        .then(r => r.json())
+        .then(st => {
+          if (st.tare_offset !== undefined) {
+            document.getElementById("force-tare-val").innerText = st.tare_offset.toFixed(3) + " N";
+          }
+        })
+        .catch(() => {});
+    }
+
+    function reconnectHardware() {
+      disconnectOrRescanHardware();
+    }
+
+    function updateSensorActiveUI(active) {
+      isSensorStreaming = active;
+      const btnStart = document.getElementById("btn-start-sensor");
+      const btnStop = document.getElementById("btn-stop-sensor");
+      const badge = document.getElementById("sensor-status-badge");
+      const badgeText = document.getElementById("sensor-status-text");
+      const recDot = document.getElementById("rec-status-dot");
+      const recText = document.getElementById("rec-status-text");
+
+      if (active) {
+        btnStart.classList.add("is-active");
+        btnStart.disabled = true;
+        btnStop.disabled = false;
+        badge.className = "status-pill active";
+        badgeText.innerText = "STREAMING (10 Hz)";
+        if (recDot) recDot.className = "rec-pulse-dot";
+        if (recText) recText.innerText = "RECORDING ACTIVE";
+        if (!sessionStartTime) {
+          sessionStartTime = Date.now();
+        }
+      } else {
+        btnStart.classList.remove("is-active");
+        btnStart.disabled = false;
+        btnStop.disabled = true;
+        badge.className = "status-pill";
+        badgeText.innerText = "SENSOR STANDBY";
+        if (recDot) recDot.className = "rec-idle-dot";
+        if (recText) recText.innerText = "SESSION BUFFER IDLE";
+        loadBreathSummary();
+      }
+      evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
+    }
+
+    function resetWaveform() {
+      chartLabels = [];
+      chartSignalData = [];
+      for (let i = 0; i < MAX_CHART_SAMPLES; i++) {
+        chartLabels.push("");
+        chartSignalData.push(null);
+      }
+      if (chartInstance) {
+        chartInstance.data.labels = chartLabels;
+        chartInstance.data.datasets[0].data = chartSignalData;
+        chartInstance.update();
+      }
+      recentValues = [];
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+      initChart();
+      initSocketConnection();
+      evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
+      updateRecordedCounters();
+      loadBreathSummary();
+    });
+  </script>
+</body>
+
+</html>
