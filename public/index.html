@@ -18,6 +18,15 @@
   <!-- Socket.io and Chart.js CDNs -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <!-- jsPDF for Research PDF Report Generation -->
+  <script src="/static/jspdf.umd.min.js"></script>
+  <script>
+    if (typeof window.jspdf === 'undefined') {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+      document.head.appendChild(s);
+    }
+  </script>
   <!-- Vernier Go Direct Browser SDK (WebHID & Web Bluetooth) -->
   <script src="/static/godirect.min.umd.js"></script>
   <script>
@@ -816,6 +825,428 @@
       color: #ffffff;
     }
 
+    /* Waveform Window Controls & Interactive Toolbar */
+    .chart-controls-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .window-btn-group {
+      display: inline-flex;
+      background: rgba(0, 0, 0, 0.45);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .btn-window {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-window:hover {
+      color: #ffffff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .btn-window.active {
+      background: var(--accent-cyan);
+      color: #070b14;
+      font-weight: 700;
+      box-shadow: 0 2px 8px rgba(6, 182, 212, 0.4);
+    }
+
+    .btn-chart-tool {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      color: #cbd5e1;
+      font-family: var(--font-ui);
+      font-size: 0.74rem;
+      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn-chart-tool:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: #ffffff;
+    }
+
+    .btn-chart-tool.is-paused {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: rgba(245, 158, 11, 0.5);
+      color: #fbbf24;
+      animation: pausePulse 1.8s infinite;
+    }
+
+    @keyframes pausePulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.65; }
+    }
+
+    .badge-stability {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .badge-stability.stable {
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+    }
+
+    .badge-stability.irregular {
+      background: rgba(245, 158, 11, 0.18);
+      border: 1px solid rgba(245, 158, 11, 0.5);
+      color: #fbbf24;
+    }
+
+    .badge-stability.pause {
+      background: rgba(239, 68, 68, 0.18);
+      border: 1px solid rgba(239, 68, 68, 0.5);
+      color: #f87171;
+    }
+
+    .badge-stability.quality {
+      background: rgba(148, 163, 184, 0.18);
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      color: #cbd5e1;
+    }
+
+    /* Live Respiratory Research Metrics Panel (Under Waveform) */
+    .research-metrics-container {
+      margin-top: 14px;
+      background: rgba(10, 16, 29, 0.7);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .research-metrics-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 8px;
+    }
+
+    .research-metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    @media (max-width: 1100px) {
+      .research-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 600px) {
+      .research-metrics-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .res-metric-card {
+      background: rgba(15, 23, 42, 0.65);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      position: relative;
+      transition: all 0.2s ease;
+    }
+
+    .res-metric-card:hover {
+      border-color: rgba(56, 189, 248, 0.3);
+      background: rgba(15, 23, 42, 0.85);
+    }
+
+    .res-metric-card.highlight-variability {
+      border-left: 3px solid #f59e0b;
+    }
+
+    .res-metric-card.highlight-stability {
+      border-left: 3px solid #10b981;
+    }
+
+    .res-metric-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .res-metric-val {
+      font-family: var(--font-mono);
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.1;
+      display: flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+
+    .res-metric-unit {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .res-metric-formula {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--text-muted);
+    }
+
+    /* Experiment Session Labeling */
+    .condition-selector-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .condition-pills {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn-condition {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      color: var(--text-secondary);
+      font-size: 0.76rem;
+      font-weight: 600;
+      padding: 8px 6px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+
+    .btn-condition:hover {
+      background: rgba(255, 255, 255, 0.06);
+      color: #ffffff;
+    }
+
+    .btn-condition.active-normal {
+      background: rgba(16, 185, 129, 0.15);
+      border-color: #10b981;
+      color: #34d399;
+      font-weight: 700;
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+    }
+
+    .btn-condition.active-controlled {
+      background: rgba(14, 165, 233, 0.15);
+      border-color: #0ea5e9;
+      color: #38bdf8;
+      font-weight: 700;
+      box-shadow: 0 0 12px rgba(14, 165, 233, 0.25);
+    }
+
+    .btn-condition.active-irregular {
+      background: rgba(245, 158, 11, 0.15);
+      border-color: #f59e0b;
+      color: #fbbf24;
+      font-weight: 700;
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+    }
+
+    /* Multi-Session Comparison Panel */
+    .comparison-table-wrapper {
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      text-align: left;
+    }
+
+    .comparison-table th {
+      background: rgba(15, 23, 42, 0.85);
+      color: var(--text-muted);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+    }
+
+    .comparison-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: #e2e8f0;
+      white-space: nowrap;
+    }
+
+    .comparison-table tr:hover {
+      background: rgba(56, 189, 248, 0.04);
+    }
+
+    /* Irregularity Log Cards */
+    .flag-log-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 240px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    .flag-item {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 8px 12px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 0.78rem;
+    }
+
+    .flag-item.flag-warn {
+      border-left: 3px solid #f59e0b;
+    }
+
+    .flag-item.flag-alert {
+      border-left: 3px solid #ef4444;
+    }
+
+    .flag-item.flag-info {
+      border-left: 3px solid #38bdf8;
+    }
+
+    .flag-time {
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      font-size: 0.72rem;
+      white-space: nowrap;
+    }
+
+    .flag-title {
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .flag-desc {
+      color: var(--text-secondary);
+      margin-top: 2px;
+      line-height: 1.35;
+    }
+
+    /* Configurable Thresholds Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      z-index: 99999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-backdrop.is-open {
+      display: flex;
+    }
+
+    .threshold-modal-card {
+      background: #0d1527;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 14px;
+      width: 100%;
+      max-width: 600px;
+      box-shadow: 0 24px 50px rgba(0, 0, 0, 0.7);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .thresh-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      align-items: center;
+      gap: 12px;
+      background: rgba(0, 0, 0, 0.25);
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .thresh-title {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #f1f5f9;
+    }
+
+    .thresh-sub {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .thresh-input {
+      background: rgba(0, 0, 0, 0.5);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: #38bdf8;
+      font-family: var(--font-mono);
+      font-size: 0.88rem;
+      font-weight: 600;
+      width: 100%;
+      text-align: right;
+    }
+
     .tare-guide-box {
       font-size: 0.8rem;
       color: var(--text-secondary);
@@ -1167,25 +1598,62 @@
               </svg>
               <span>Breathing Pattern Session Logger</span>
             </div>
-            <span class="badge-subtle">CSV / JSON Export</span>
+            <span class="badge-subtle">Research Protocol</span>
           </div>
 
-          <!-- Hero Start / Stop Action Buttons -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <!-- Experiment Condition Label Selector -->
+          <div class="condition-selector-group">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Experiment Condition:</span>
+              <span id="current-condition-badge" style="font-size: 0.7rem; font-family: var(--font-mono); color: #34d399; font-weight: 700;">NORMAL BREATHING</span>
+            </div>
+            <div class="condition-pills">
+              <button type="button" class="btn-condition active-normal" id="cond-normal" onclick="setExperimentCondition('Normal')">
+                <span>Normal</span>
+                <span style="font-size: 0.65rem; opacity: 0.75;">Resting Eupnea</span>
+              </button>
+              <button type="button" class="btn-condition" id="cond-controlled" onclick="setExperimentCondition('Controlled')">
+                <span>Controlled</span>
+                <span style="font-size: 0.65rem; opacity: 0.75;">Paced Breathing</span>
+              </button>
+              <button type="button" class="btn-condition" id="cond-irregular" onclick="setExperimentCondition('Irregular')">
+                <span>Irregular</span>
+                <span style="font-size: 0.65rem; opacity: 0.75;">Free / Variable</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Subject / Experiment Notes -->
+          <div style="margin-bottom: 12px;">
+            <input type="text" id="session-notes-input" placeholder="Subject / protocol notes (e.g., Supine, Trial 1, breath hold test)..."
+              style="width: 100%; background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 7px 12px; font-size: 0.78rem; color: #f8fafc; font-family: var(--font-ui);">
+          </div>
+
+          <!-- Hero Action Buttons: Start, Pause/Resume, Stop & Save -->
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr 1.2fr; gap: 8px;">
             <button id="btn-start-sensor" class="btn btn-record-start" onclick="startSensor()"
               title="Start capturing and recording breathing data">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polygon points="5 3 19 12 5 21 5 3" fill="currentColor"></polygon>
               </svg>
-              <span>Start Recording</span>
+              <span>Start</span>
             </button>
 
-            <button id="btn-stop-sensor" class="btn btn-record-stop" onclick="stopSensor()" disabled
-              title="Pause / Stop recording session">
+            <button id="btn-pause-sensor" class="btn btn-secondary" onclick="togglePauseRecording()" disabled
+              title="Pause or resume recording without clearing data" style="background: rgba(255,255,255,0.06); border: 1px solid var(--border-subtle); color: #cbd5e1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.8rem; font-weight: 600; border-radius: 8px; cursor: pointer;">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                <rect x="6" y="4" width="4" height="16" fill="currentColor"></rect>
+                <rect x="14" y="4" width="4" height="16" fill="currentColor"></rect>
+              </svg>
+              <span id="btn-pause-text">Pause</span>
+            </button>
+
+            <button id="btn-stop-sensor" class="btn btn-record-stop" onclick="stopAndSaveSession()" disabled
+              title="Stop and save session into experiment comparison library">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <rect x="6" y="6" width="12" height="12" fill="currentColor"></rect>
               </svg>
-              <span>Stop Recording</span>
+              <span>Stop &amp; Save</span>
             </button>
           </div>
 
@@ -1216,8 +1684,8 @@
               </div>
             </div>
 
-            <!-- Download Actions -->
-            <div class="download-btn-row" style="grid-template-columns: 1.4fr 1.1fr 0.8fr 0.8fr;">
+            <!-- Download & Export Actions -->
+            <div class="download-btn-row" style="grid-template-columns: 1.2fr 1fr 0.8fr 1.3fr 0.7fr;">
               <button id="btn-download-summary" class="btn btn-download-primary" onclick="downloadPhysicalSummaryCSV()"
                 disabled title="Download clean human-readable breath-by-breath table in CSV">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1225,7 +1693,6 @@
                   <polyline points="14 2 14 8 20 8"></polyline>
                   <line x1="16" y1="13" x2="8" y2="13"></line>
                   <line x1="16" y1="17" x2="8" y2="17"></line>
-                  <polyline points="10 9 9 9 8 9"></polyline>
                 </svg>
                 <span>Summary CSV</span>
               </button>
@@ -1245,6 +1712,16 @@
                 JSON
               </button>
 
+              <button id="btn-download-pdf" class="btn btn-download-primary" onclick="exportSessionPDF()" disabled
+                style="background: linear-gradient(135deg, #8b5cf6, #6366f1); border-color: #8b5cf6;"
+                title="Generate comprehensive scientific PDF report with graphs and statistics">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+                <span>PDF Report</span>
+              </button>
+
               <button id="btn-clear-rec" class="btn btn-clear-data" onclick="clearSessionRecording()"
                 title="Reset session samples and breath counter">
                 Clear
@@ -1258,8 +1735,8 @@
             <ol style="margin-left: 18px; margin-top: 4px; display: flex; flex-direction: column; gap: 4px;">
               <li>Fasten belt comfortably around your lower chest/rib cage.</li>
               <li>Exhale naturally to empty lungs, then click <strong>Tare / Zero Baseline</strong>.</li>
-              <li>Click <strong>Start Recording</strong> and breathe normally.</li>
-              <li>Click <strong>Stop</strong> and <strong>Download CSV</strong> when your session is complete.</li>
+              <li>Select condition (Normal, Controlled, or Irregular) and click <strong>Start</strong>.</li>
+              <li>Click <strong>Stop &amp; Save</strong> to log session and <strong>PDF Report</strong> to export.</li>
             </ol>
           </div>
         </section>
@@ -1287,8 +1764,7 @@
               <span style="color: var(--text-muted); margin-left: 6px;">(S/N: <strong
                   id="hw-serial">0K7014Z0</strong>)</span>
             </div>
-            <span style="color: var(--status-active); font-family: var(--font-mono); font-size: 0.75rem;">USB HID 10
-              Hz</span>
+            <span style="color: var(--status-active); font-family: var(--font-mono); font-size: 0.75rem;">USB HID 10 Hz</span>
           </div>
 
           <!-- Force Balance Readout -->
@@ -1337,8 +1813,8 @@
             </div>
           </div>
 
-          <!-- Calibration & Hardware Management -->
-          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px;">
+          <!-- Calibration, Hardware Management & Thresholds -->
+          <div style="display: grid; grid-template-columns: 1.1fr 1fr 1.1fr; gap: 8px;">
             <button id="btn-tare-sensor" class="btn btn-tare" onclick="tareSensor()"
               title="Zeroes resting strap tension at end-expiration">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1346,7 +1822,7 @@
                 <line x1="12" y1="8" x2="12" y2="16"></line>
                 <line x1="8" y1="12" x2="16" y2="12"></line>
               </svg>
-              <span>Tare / Zero Baseline</span>
+              <span>Tare / Zero</span>
             </button>
 
             <button id="btn-reconnect-hw" class="btn btn-disconnect-hw" onclick="disconnectOrRescanHardware()"
@@ -1356,6 +1832,16 @@
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
               </svg>
               <span id="btn-rescan-text">Rescan / Demo</span>
+            </button>
+
+            <button id="btn-open-thresholds" class="btn btn-secondary" onclick="openThresholdsModal()"
+              style="background: rgba(255,255,255,0.06); border: 1px solid var(--border-subtle); color: #cbd5e1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.78rem; font-weight: 600; border-radius: 8px; cursor: pointer;"
+              title="Configure mathematical thresholds for stable breathing vs irregularity detection">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+              </svg>
+              <span>⚙ Thresholds</span>
             </button>
           </div>
         </section>
@@ -1431,8 +1917,7 @@
                 <span id="hud-range-val">0.0</span>
                 <span class="hud-unit">N</span>
               </div>
-              <div class="hud-sub-val">Min: <span id="hud-min-val">0.0</span> N | Max: <span id="hud-max-val">0.0</span>
-                N</div>
+              <div class="hud-sub-val">Min: <span id="hud-min-val">0.0</span> N | Max: <span id="hud-max-val">0.0</span> N</div>
             </div>
           </div>
         </section>
@@ -1446,19 +1931,32 @@
               </svg>
               <span>Breathing Pattern Oscilloscope (10 Hz)</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <button id="btn-header-csv" class="btn btn-download-primary"
-                style="padding: 5px 12px; font-size: 0.75rem;" onclick="downloadSessionCSV()" disabled
-                title="Download recorded session in CSV">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="7 10 12 15 17 10"></polyline>
-                  <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                <span>Download CSV</span>
+            
+            <!-- Interactive Oscilloscope Toolbar & Window Selector -->
+            <div class="chart-controls-toolbar">
+              <!-- Viewing Window: 30s, 60s, 120s -->
+              <div class="window-btn-group" title="Adjust viewing window duration">
+                <button class="btn-window active" id="win-30s" onclick="setChartWindow(30)">30s</button>
+                <button class="btn-window" id="win-60s" onclick="setChartWindow(60)">60s</button>
+                <button class="btn-window" id="win-120s" onclick="setChartWindow(120)">120s</button>
+              </div>
+
+              <!-- Waveform Control Tools -->
+              <button class="btn-chart-tool" id="btn-chart-pause" onclick="toggleChartPause()" title="Freeze / resume waveform graph updates without interrupting data collection">
+                <span id="chart-pause-icon">⏸</span>
+                <span id="chart-pause-text">Pause</span>
               </button>
-              <button class="btn btn-rescan" style="padding: 5px 12px; font-size: 0.75rem;" onclick="resetWaveform()">
-                Reset View
+              <button class="btn-chart-tool" onclick="zoomChart(-1)" title="Zoom in (decrease Y-axis scale)">
+                🔍+
+              </button>
+              <button class="btn-chart-tool" onclick="zoomChart(1)" title="Zoom out (increase Y-axis scale)">
+                🔍-
+              </button>
+              <button class="btn-chart-tool" onclick="resetWaveform()" title="Reset graph view & scales">
+                ↺ Reset
+              </button>
+              <button class="btn-chart-tool" onclick="exportWaveformPNG()" title="Export high-resolution graph snapshot as PNG">
+                📷 PNG
               </button>
             </div>
           </div>
@@ -1468,20 +1966,152 @@
               <div class="chart-legend-custom">
                 <div class="legend-item">
                   <div class="legend-line-cyan"></div>
-                  <span>Chest Expansion Waveform (Newtons)</span>
+                  <span>Raw Belt Force (N)</span>
                 </div>
                 <div class="legend-item">
-                  <div class="legend-dot-red"></div>
-                  <span>Detected Inhalation Peaks</span>
+                  <div style="width: 10px; height: 10px; border-radius: 50%; background: #10b981; border: 1.5px solid #ffffff;"></div>
+                  <span>Inhalation Peaks</span>
+                </div>
+                <div class="legend-item">
+                  <div style="width: 10px; height: 10px; border-radius: 50%; background: #f59e0b; border: 1.5px solid #ffffff;"></div>
+                  <span>Exhalation Troughs</span>
                 </div>
               </div>
-              <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-muted);">
-                Window: 12.0s (120 points at 10 Hz)
-              </span>
+
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span id="chart-stability-pill" class="badge-stability stable">● Consistent Pattern</span>
+                <span id="chart-window-label" style="font-family: var(--font-mono); font-size: 0.73rem; color: var(--text-muted);">
+                  Window: 30.0s (300 points @ 10 Hz)
+                </span>
+              </div>
             </div>
 
             <div class="chart-canvas-wrapper">
               <canvas id="respiratoryChart"></canvas>
+            </div>
+          </div>
+
+          <!-- 3E. LIVE RESPIRATORY RESEARCH METRICS PANEL (UNDER WAVEFORM) -->
+          <div class="research-metrics-container">
+            <div class="research-metrics-header">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 20V10M12 20V4M6 20v-6"></path>
+                </svg>
+                <span style="font-size: 0.76rem; font-weight: 700; color: #f8fafc; text-transform: uppercase; letter-spacing: 0.05em;">
+                  Live Respiratory Metrics &bull; Radiation Planning Research
+                </span>
+              </div>
+              <span style="font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">
+                Variability: CV = (SD / Mean) &times; 100%
+              </span>
+            </div>
+
+            <!-- 8 Live Metrics Grid -->
+            <div class="research-metrics-grid">
+              <!-- 1. Current Respiratory Rate -->
+              <div class="res-metric-card">
+                <div class="res-metric-label">
+                  <span>Current Resp Rate</span>
+                  <span style="color: var(--accent-cyan); font-family: var(--font-mono);">LIVE</span>
+                </div>
+                <div class="res-metric-val">
+                  <span id="res-live-rate">--</span>
+                  <span class="res-metric-unit">BPM</span>
+                </div>
+                <div class="res-metric-formula">Instantaneous 60 / T_cycle</div>
+              </div>
+
+              <!-- 2. Average Respiratory Rate -->
+              <div class="res-metric-card">
+                <div class="res-metric-label">
+                  <span>Average Resp Rate</span>
+                  <span>MEAN</span>
+                </div>
+                <div class="res-metric-val">
+                  <span id="res-avg-rate">--</span>
+                  <span class="res-metric-unit">BPM</span>
+                </div>
+                <div class="res-metric-formula">Mean across detected cycles</div>
+              </div>
+
+              <!-- 3. Average Breathing Amplitude -->
+              <div class="res-metric-card">
+                <div class="res-metric-label">
+                  <span>Average Amplitude</span>
+                  <span>TIDAL &Delta;F</span>
+                </div>
+                <div class="res-metric-val">
+                  <span id="res-avg-amp">--</span>
+                  <span class="res-metric-unit">N</span>
+                </div>
+                <div class="res-metric-formula">Peak-to-trough force difference</div>
+              </div>
+
+              <!-- 4. Average Cycle Duration -->
+              <div class="res-metric-card">
+                <div class="res-metric-label">
+                  <span>Average Duration</span>
+                  <span>PERIOD</span>
+                </div>
+                <div class="res-metric-val">
+                  <span id="res-avg-dur">--</span>
+                  <span class="res-metric-unit">s</span>
+                </div>
+                <div class="res-metric-formula">Peak-to-peak interval</div>
+              </div>
+
+              <!-- 5. Breathing Amplitude Variability (CV%) -->
+              <div class="res-metric-card highlight-variability">
+                <div class="res-metric-label">
+                  <span>Amplitude CV%</span>
+                  <span style="color: #fbbf24;">VARIABILITY</span>
+                </div>
+                <div class="res-metric-val">
+                  <span id="res-cv-amp">--</span>
+                  <span class="res-metric-unit">%</span>
+                </div>
+                <div class="res-metric-formula">CV_amp = (&sigma;_A / &mu;_A) &times; 100%</div>
+              </div>
+
+              <!-- 6. Cycle-Duration Variability (CV%) -->
+              <div class="res-metric-card highlight-variability">
+                <div class="res-metric-label">
+                  <span>Duration CV%</span>
+                  <span style="color: #fbbf24;">VARIABILITY</span>
+                </div>
+                <div class="res-metric-val">
+                  <span id="res-cv-dur">--</span>
+                  <span class="res-metric-unit">%</span>
+                </div>
+                <div class="res-metric-formula">CV_dur = (&sigma;_T / &mu;_T) &times; 100%</div>
+              </div>
+
+              <!-- 7. Percentage of Stable Breathing Time -->
+              <div class="res-metric-card highlight-stability">
+                <div class="res-metric-label">
+                  <span>Stable Breathing Time</span>
+                  <span style="color: #34d399;">CONSISTENCY</span>
+                </div>
+                <div class="res-metric-val">
+                  <span id="res-stable-pct">--</span>
+                  <span class="res-metric-unit">%</span>
+                </div>
+                <div class="res-metric-formula">% cycles within CV stability thresholds</div>
+              </div>
+
+              <!-- 8. Sensor Signal Quality -->
+              <div class="res-metric-card">
+                <div class="res-metric-label">
+                  <span>Signal Quality</span>
+                  <span id="res-quality-label" style="color: #38bdf8;">CLEAN</span>
+                </div>
+                <div class="res-metric-val">
+                  <span id="res-quality-pct">100</span>
+                  <span class="res-metric-unit">%</span>
+                </div>
+                <div class="res-metric-formula">Noise &amp; baseline drift integrity</div>
+              </div>
             </div>
           </div>
         </section>
@@ -1490,7 +2120,116 @@
 
     </div><!-- /dashboard-grid -->
 
-    <!-- 4. PHYSICAL BREATH-BY-BREATH CYCLE TELEMETRY -->
+    <!-- 4. BREATHING PATTERN & IRREGULARITY DIAGNOSTICS (RESEARCH ANALYSIS) -->
+    <section class="panel-card" aria-label="Breathing Pattern Diagnostics">
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+            <line x1="12" y1="9" x2="12" y2="13"></line>
+            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+          </svg>
+          <span>Breathing Pattern Detection &amp; Irregularity Diagnostics (Research Analysis)</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span id="diag-flags-count" class="badge-subtle">0 Irregularities Flagged</span>
+          <button class="btn btn-clear-data" style="padding: 4px 10px; font-size: 0.72rem;" onclick="clearIrregularityLog()">
+            Clear Log
+          </button>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <!-- Status summary strip -->
+        <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 12px; background: rgba(0, 0, 0, 0.25); padding: 10px 14px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+          <div>
+            <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Pattern Assessment:</span>
+            <div id="diag-pattern-title" style="font-size: 0.85rem; font-weight: 700; color: #34d399; margin-top: 2px;">
+              Consistent Breathing Pattern (Eupnea)
+            </div>
+          </div>
+          <div>
+            <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Signal Integrity:</span>
+            <div id="diag-signal-status" style="font-size: 0.85rem; font-weight: 600; color: #38bdf8; margin-top: 2px;">
+              Optimal &bull; Low Noise
+            </div>
+          </div>
+          <div>
+            <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Radiation Gating Fit:</span>
+            <div id="diag-gating-fit" style="font-size: 0.85rem; font-weight: 700; color: #34d399; margin-top: 2px;">
+              Consistent &bull; High
+            </div>
+          </div>
+        </div>
+
+        <!-- Scrollable Flag Log with Exact Reasons -->
+        <div class="flag-log-container" id="flag-log-container">
+          <div class="flag-item flag-info">
+            <span class="flag-time">[00:00.0]</span>
+            <div>
+              <div class="flag-title">System Ready &bull; Awaiting Live Vernier Transducer Stream</div>
+              <div class="flag-desc">
+                Mathematical detection active for rhythm irregularity (CV_dur &gt; 15%), amplitude shifts (CV_amp &gt; 20%), breathing pauses (&gt; 8s), and sensor artifacts. Poor signal quality is evaluated separately from physiological variations.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 5. MULTI-SESSION EXPERIMENT COMPARISON PANEL -->
+    <section class="panel-card" aria-label="Multi-Session Experiment Comparison">
+      <div class="panel-header">
+        <div class="panel-title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="3" y1="9" x2="21" y2="9"></line>
+            <line x1="9" y1="21" x2="9" y2="9"></line>
+          </svg>
+          <span>Multi-Session Experiment Comparison &bull; Consistency vs. Irregularity</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="saved-sessions-count" class="badge-subtle">0 Sessions Saved</span>
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.72rem; background: rgba(255,255,255,0.06); border: 1px solid var(--border-subtle); color: #cbd5e1; border-radius: 6px; cursor: pointer;" onclick="exportAllSessionsJSON()" title="Export all experimental sessions as combined JSON">
+            Export All JSON
+          </button>
+        </div>
+      </div>
+
+      <p style="font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
+        Compare breathing pattern consistency, tidal excursion stability, and cycle variability across Normal, Controlled, and Irregular experimental sessions for your radiation treatment planning research.
+      </p>
+
+      <div class="comparison-table-wrapper">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>Session ID</th>
+              <th>Recorded Time</th>
+              <th>Condition</th>
+              <th>Notes / Protocol</th>
+              <th>Duration</th>
+              <th>Breaths</th>
+              <th>Avg BPM</th>
+              <th>Avg Amp (N)</th>
+              <th>Amp CV%</th>
+              <th>Dur CV%</th>
+              <th>Stable Time %</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="session-comparison-body">
+            <tr>
+              <td colspan="12" style="text-align: center; color: var(--text-muted); padding: 24px;">
+                No saved experimental sessions yet. Complete a trial and click <strong>Stop &amp; Save</strong> to compare sessions here.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 6. PHYSICAL BREATH-BY-BREATH CYCLE TELEMETRY -->
     <section class="panel-card" aria-label="Physical Breath-by-Breath Table">
       <div class="panel-header">
         <div class="panel-title">
@@ -1528,9 +2267,9 @@
               <th>Inhale (Ti)</th>
               <th>Exhale (Te)</th>
               <th>I:E Ratio</th>
-              <th>Resting Base</th>
+              <th>Trough Base</th>
               <th>Peak Inhale</th>
-              <th>Net Excursion</th>
+              <th>Amplitude (&Delta;F)</th>
               <th>Physical Classification</th>
             </tr>
           </thead>
@@ -1547,1041 +2286,108 @@
 
     <!-- Footer -->
     <footer class="app-footer">
-      <div><strong>RespiTrack Breathing Pattern Acquisition</strong> &bull; Vernier Go Direct&reg; Respiration Belt USB
-        Integration</div>
-      <div>10 Hz Transducer Stream &bull; Session Data Export (CSV &amp; JSON) &bull; Device S/N: <span
-          id="footer-serial">0K7014Z0</span></div>
+      <div><strong>RespiTrack Breathing Pattern Acquisition</strong> &bull; Vernier Go Direct&reg; Respiration Belt USB Integration</div>
+      <div>10 Hz Transducer Stream &bull; Session Data Export (CSV &amp; PDF) &bull; Device S/N: <span id="footer-serial">0K7014Z0</span> &bull; Research Investigation Mode</div>
     </footer>
+
+    <!-- 7. CONFIGURABLE RESEARCH THRESHOLDS MODAL -->
+    <div id="thresholds-modal-backdrop" class="modal-backdrop">
+      <div class="threshold-modal-card">
+        <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); padding-bottom: 12px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span style="font-weight: 700; color: #f8fafc; font-size: 1rem;">Research Analysis Thresholds</span>
+          </div>
+          <button onclick="closeThresholdsModal()" style="background: transparent; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; padding: 4px;">&times;</button>
+        </div>
+
+        <p style="font-size: 0.76rem; color: var(--text-secondary); line-height: 1.4;">
+          Adjust mathematical criteria for detecting breathing stability and irregularities for research analysis. These parameters produce measurable evidence without making clinical treatment decisions.
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <!-- 1. Duration CV% -->
+          <div class="thresh-row">
+            <div>
+              <div class="thresh-title">Max Duration Variability (CV_dur %)</div>
+              <div class="thresh-sub">Cycles with CV_dur &gt; threshold are flagged as irregular rhythm (default: 15.0%)</div>
+            </div>
+            <input type="number" id="thresh-cv-dur" class="thresh-input" value="15.0" step="1.0" min="5.0" max="50.0">
+          </div>
+
+          <!-- 2. Amplitude CV% -->
+          <div class="thresh-row">
+            <div>
+              <div class="thresh-title">Max Amplitude Variability (CV_amp %)</div>
+              <div class="thresh-sub">Cycles with CV_amp &gt; threshold are flagged as irregular amplitude (default: 20.0%)</div>
+            </div>
+            <input type="number" id="thresh-cv-amp" class="thresh-input" value="20.0" step="1.0" min="5.0" max="60.0">
+          </div>
+
+          <!-- 3. Breathing Pause Limit -->
+          <div class="thresh-row">
+            <div>
+              <div class="thresh-title">Breathing Pause Limit (seconds)</div>
+              <div class="thresh-sub">Time without inhalation peak before flagging apnea / breath hold (default: 8.0s)</div>
+            </div>
+            <input type="number" id="thresh-pause-dur" class="thresh-input" value="8.0" step="0.5" min="3.0" max="30.0">
+          </div>
+
+          <!-- 4. Unusual Amplitude Ratio -->
+          <div class="thresh-row">
+            <div>
+              <div class="thresh-title">Unusual Amplitude Jump Ratio</div>
+              <div class="thresh-sub">Breath excursion &gt; ratio &times; mean excursion flagged as sigh / jump (default: 1.70x)</div>
+            </div>
+            <input type="number" id="thresh-amp-ratio" class="thresh-input" value="1.70" step="0.1" min="1.2" max="3.0">
+          </div>
+
+          <!-- 5. Baseline Drift Limit -->
+          <div class="thresh-row">
+            <div>
+              <div class="thresh-title">Baseline Drift Limit (N)</div>
+              <div class="thresh-sub">Transducer baseline shift from tare zero before drift alert (default: 1.50 N)</div>
+            </div>
+            <input type="number" id="thresh-drift" class="thresh-input" value="1.50" step="0.1" min="0.5" max="5.0">
+          </div>
+
+          <!-- 6. Sensor High-Frequency Noise Limit -->
+          <div class="thresh-row">
+            <div>
+              <div class="thresh-title">Sensor Noise Ripple Limit (N)</div>
+              <div class="thresh-sub">High frequency ripple above limit marks poor signal quality separately (default: 0.20 N)</div>
+            </div>
+            <input type="number" id="thresh-noise" class="thresh-input" value="0.20" step="0.02" min="0.05" max="1.0">
+          </div>
+
+          <!-- 7. Min Peak Prominence -->
+          <div class="thresh-row">
+            <div>
+              <div class="thresh-title">Min Peak Prominence (N)</div>
+              <div class="thresh-sub">Minimum excursion above trough to register a breath peak (default: 0.35 N)</div>
+            </div>
+            <input type="number" id="thresh-prominence" class="thresh-input" value="0.35" step="0.05" min="0.1" max="2.0">
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 8px;">
+          <button class="btn btn-clear-data" onclick="resetThresholdsToDefaults()" style="font-size: 0.78rem;">
+            Reset Defaults
+          </button>
+          <button class="btn btn-download-primary" onclick="saveResearchThresholds()" style="font-size: 0.78rem;">
+            Save &amp; Apply Thresholds
+          </button>
+        </div>
+      </div>
+    </div>
 
   </div>
 
-  <!-- Client-side Logic -->
-  <script>
-    let socket = null;
-    let isSensorStreaming = false;
-    let isHardwareConnected = false;
-
-    let totalPacketsReceived = 0;
-    let lastSensorValue = 0;
-    let sessionStartTime = null;
-    let uptimeIntervalId = null;
-
-    // Session Data Recording Buffer
-    let recordedSessionData = [];
-
-    const MAX_CHART_SAMPLES = 120; // 12s at 10 Hz
-    let chartLabels = [];
-    let chartSignalData = [];
-    let chartInstance = null;
-    let recentValues = [];
-
-    // Current physiological metrics for diagnostics
-    let currentBpm = 14.0;
-    let currentAmplitude = 2.5;
-    let currentNoise = 0.05;
-    let currentBreathCount = 0;
-
-    // --- Chart.js Setup ---
-    function initChart() {
-      const ctx = document.getElementById("respiratoryChart").getContext("2d");
-      const gradient = ctx.createLinearGradient(0, 0, 0, 320);
-      gradient.addColorStop(0, "rgba(6, 182, 212, 0.45)");
-      gradient.addColorStop(0.7, "rgba(6, 182, 212, 0.08)");
-      gradient.addColorStop(1, "rgba(6, 182, 212, 0.0)");
-
-      for (let i = 0; i < MAX_CHART_SAMPLES; i++) {
-        chartLabels.push("");
-        chartSignalData.push(null);
-      }
-
-      chartInstance = new Chart(ctx, {
-        type: "line",
-        data: {
-          labels: chartLabels,
-          datasets: [
-            {
-              label: "Chest Expansion (N)",
-              data: chartSignalData,
-              borderColor: "#06b6d4",
-              borderWidth: 2.8,
-              backgroundColor: gradient,
-              fill: true,
-              pointRadius: 0,
-              tension: 0.35,
-              cubicInterpolationMode: "monotone"
-            }
-          ]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          animation: false,
-          interaction: { intersect: false, mode: "index" },
-          plugins: {
-            legend: { display: false },
-            tooltip: {
-              enabled: true,
-              callbacks: {
-                label: (ctx) => `Expansion Force: ${ctx.parsed.y.toFixed(2)} N`
-              }
-            }
-          },
-          scales: {
-            x: {
-              display: true,
-              grid: { color: "rgba(255, 255, 255, 0.04)" },
-              ticks: { display: false }
-            },
-            y: {
-              min: 0,
-              max: 5.0,
-              grid: { color: "rgba(255, 255, 255, 0.07)" },
-              ticks: {
-                color: "#64748b",
-                font: { family: "'JetBrains Mono', monospace", size: 11 },
-                callback: (v) => v.toFixed(1) + " N"
-              }
-            }
-          }
-        }
-      });
-    }
-
-    // =======================================================
-    // REAL-TIME BREATHING PATTERN ASSESSMENT
-    // =======================================================
-    function evaluateBreathingDiagnostics(bpm, amp, noise) {
-      const card = document.getElementById("diagnostic-summary-card");
-      const badge = document.getElementById("diag-badge");
-      const headline = document.getElementById("diag-headline");
-      const desc = document.getElementById("diag-description");
-      const svgBox = document.getElementById("diag-status-svg");
-
-      const chipRate = document.getElementById("diag-chip-rate");
-      const chipDepth = document.getElementById("diag-chip-depth");
-      const chipReg = document.getElementById("diag-chip-regularity");
-      const chipSuit = document.getElementById("diag-chip-suitability");
-
-      if (!isSensorStreaming) {
-        card.className = "diagnostic-summary-card diag-standby";
-        badge.innerText = "STANDBY";
-        headline.innerText = isHardwareConnected ? "Vernier Belt Ready — Awaiting Recording" : "Searching for Vernier USB Belt...";
-        desc.innerText = isHardwareConnected
-          ? "The Vernier Go Direct Respiration Belt is connected over USB. Click Start Recording to begin capturing breathing data."
-          : "Plug the Vernier Go Direct Respiration Belt into a USB port on this computer, then click Rescan USB.";
-        chipRate.innerText = "-- BPM";
-        chipDepth.innerText = "-- N";
-        chipReg.innerText = "Standby";
-        chipSuit.innerText = isHardwareConnected ? "Hardware Online" : "Hardware Offline";
-        svgBox.innerHTML = `
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-        `;
-        return;
-      }
-
-      let abnormalities = [];
-
-      // 1. Respiration Rate Checks
-      let rateClassText = "Normal Eupnea";
-      if (bpm > 20.0) {
-        rateClassText = "Tachypnea (> 20 BPM)";
-        abnormalities.push({
-          title: "Tachypnea / Rapid Breathing (> 20 BPM)",
-          desc: `Elevated respiration rate (${bpm.toFixed(1)} BPM) recorded from the physical belt. Breathing frequency is above typical resting adult rates (12-18 BPM).`,
-          level: "warn"
-        });
-      } else if (bpm > 0 && bpm < 10.0) {
-        rateClassText = "Bradypnea (< 10 BPM)";
-        abnormalities.push({
-          title: "Bradypnea / Slow Breathing (< 10 BPM)",
-          desc: `Slow breathing frequency (${bpm.toFixed(1)} BPM) with extended cycle period (${(60 / bpm).toFixed(1)} s per breath).`,
-          level: "warn"
-        });
-      }
-
-      // 2. Amplitude / Tidal Tension Excursion Checks
-      let depthClassText = "Optimal (Normal)";
-      if (amp > 5.5) {
-        depthClassText = "Hyperpnea / Deep (> 5.5 N)";
-        abnormalities.push({
-          title: "Deep Thoracic Expansion / Hyperpnea (> 5.5 N)",
-          desc: `Substantial chest expansion (${amp.toFixed(1)} N excursion) indicating deep or labored breathing cycles.`,
-          level: "info"
-        });
-      } else if (amp < 0.6) {
-        depthClassText = "Very Shallow (< 0.6 N)";
-        abnormalities.push({
-          title: "Shallow Breathing / Loose Belt (< 0.6 N)",
-          desc: `Very low chest excursion tension (${amp.toFixed(2)} N). If you are breathing normally, snug the elastic belt strap slightly or click Tare / Zero Baseline at exhalation.`,
-          level: "warn"
-        });
-      }
-
-      // 3. Noise / Tremor Checks
-      let regText = "Steady Rhythm";
-      if (noise > 0.25) {
-        regText = "High Tremor / Motion";
-        abnormalities.push({
-          title: "Motion Artifact / Muscle Tremor Detected",
-          desc: `High-frequency tension fluctuation (${noise.toFixed(3)} N ripple). Ensure you are seated comfortably without shivering or body movement.`,
-          level: "warn"
-        });
-      } else if (noise > 0.12) {
-        regText = "Mild Variation";
-      }
-
-      // Update Breakdown Chips
-      chipRate.innerText = `${bpm.toFixed(1)} BPM (${rateClassText})`;
-      chipDepth.innerText = `${amp.toFixed(2)} N (${depthClassText})`;
-      chipReg.innerText = regText;
-
-      // Determine overall diagnosis
-      if (abnormalities.length === 0) {
-        card.className = "diagnostic-summary-card diag-normal";
-        badge.innerText = "EUPNEA (STABLE RHYTHM)";
-        headline.innerText = "Normal Resting Respiratory Pattern";
-        desc.innerText = `Physical belt is recording clean, reproducible breathing waveforms (${bpm.toFixed(1)} BPM, ${amp.toFixed(2)} N excursion) with smooth end-expiration and end-inspiration transitions.`;
-        chipSuit.innerText = "NORMAL EUPNEA";
-        chipSuit.style.color = "var(--status-active)";
-
-        svgBox.innerHTML = `
-          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-          <polyline points="22 4 12 14.01 9 11.01" />
-        `;
-      } else {
-        const dominant = abnormalities[0];
-        card.className = "diagnostic-summary-card diag-abnormal-warn";
-        badge.innerText = "PATTERN: " + dominant.title.split(" ")[0].toUpperCase();
-        chipSuit.innerText = dominant.title.split(" ")[0];
-        chipSuit.style.color = "var(--status-warn)";
-        svgBox.innerHTML = `
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="8" x2="12" y2="12"/>
-          <line x1="12" y1="16" x2="12.01" y2="16"/>
-        `;
-
-        headline.innerText = dominant.title;
-        let combinedDesc = dominant.desc;
-        if (abnormalities.length > 1) {
-          combinedDesc += " Also observed: " + abnormalities.slice(1).map(a => a.title).join("; ") + ".";
-        }
-        desc.innerText = combinedDesc;
-      }
-    }
-
-    // --- Socket.IO Client Connection & Cloud Fallback ---
-    let activeConnectionMode = "idle"; // 'browser-hid', 'browser-ble', 'socket', 'replay'
-    let cachedDemoSamples = [];
-    let cloudPlaybackInterval = null;
-    let cloudPlaybackIndex = 0;
-
-    async function checkVercelOrCloudMode() {
-      const socketStatusBadge = document.getElementById("socket-status-badge");
-      const socketStatusText = document.getElementById("socket-status-text");
-      if (socketStatusBadge && (!socket || !socket.connected)) {
-        socketStatusBadge.className = "status-pill";
-        socketStatusText.innerText = "CLOUD / BROWSER MODE";
-      }
-
-      const connBadge = document.getElementById("conn-mode-badge");
-      if (connBadge && activeConnectionMode === "idle") {
-        connBadge.innerText = "VERCEL READY";
-        connBadge.style.color = "var(--accent-cyan)";
-      }
-
-      // Check REST API for hardware status if running on Vercel
-      try {
-        const res = await fetch("/api/status");
-        if (res.ok) {
-          const status = await res.json();
-          if (status.serial_number && status.serial_number !== "Unknown") {
-            document.getElementById("hw-serial").innerText = status.serial_number;
-            document.getElementById("footer-serial").innerText = status.serial_number;
-          }
-          if (status.tare_offset !== undefined) {
-            document.getElementById("force-tare-val").innerText = status.tare_offset.toFixed(3) + " N";
-          }
-        }
-      } catch (e) {}
-
-      // Pre-load session data for instant breath summary and demo replay
-      if (cachedDemoSamples.length === 0) {
-        try {
-          const res = await fetch("/static/session_data.json");
-          if (res.ok) {
-            const data = await res.json();
-            cachedDemoSamples = data.samples || [];
-            if (cachedDemoSamples.length > 0 && recordedSessionData.length === 0) {
-              recordedSessionData = cachedDemoSamples;
-              updateRecordedCounters();
-              loadBreathSummary();
-            }
-          }
-        } catch (e) {
-          try {
-            const res2 = await fetch("/api/session-samples");
-            if (res2.ok) {
-              const data2 = await res2.json();
-              cachedDemoSamples = data2.samples || [];
-              if (cachedDemoSamples.length > 0 && recordedSessionData.length === 0) {
-                recordedSessionData = cachedDemoSamples;
-                updateRecordedCounters();
-                loadBreathSummary();
-              }
-            }
-          } catch (e2) {}
-        }
-      }
-    }
-
-    function initSocketConnection() {
-      const socketStatusBadge = document.getElementById("socket-status-badge");
-      const socketStatusText = document.getElementById("socket-status-text");
-
-      try {
-        socket = io({
-          timeout: 2500,
-          reconnectionAttempts: 2
-        });
-
-        socket.on("connect", () => {
-          socketStatusBadge.className = "status-pill connected";
-          socketStatusText.innerText = "WEBSOCKET ONLINE";
-          activeConnectionMode = "socket";
-          const connBadge = document.getElementById("conn-mode-badge");
-          if (connBadge) {
-            connBadge.innerText = "LOCAL PYTHON";
-            connBadge.style.color = "var(--status-active)";
-          }
-        });
-
-        socket.on("disconnect", () => {
-          if (activeConnectionMode === "socket") {
-            socketStatusBadge.className = "status-pill disconnected";
-            socketStatusText.innerText = "WEBSOCKET OFFLINE";
-            updateSensorActiveUI(false);
-          }
-        });
-
-        socket.on("connect_error", () => {
-          socketStatusBadge.className = "status-pill";
-          socketStatusText.innerText = "CLOUD / BROWSER MODE";
-          checkVercelOrCloudMode();
-        });
-
-        socket.on("sensor_status", (status) => {
-          // If browser device is active, let browser device take precedence
-          if (browserGdxDevice && browserGdxDevice.opened) return;
-
-          isHardwareConnected = status.connected;
-          const hwBadge = document.getElementById("hw-status-badge");
-          const hwText = document.getElementById("hw-status-text");
-
-          if (status.connected) {
-            hwBadge.className = "status-pill connected";
-            hwText.innerText = `VERNIER ${status.order_code || 'GDX-RB'} ONLINE`;
-            document.getElementById("hw-device-name").innerText = status.device_name || "Vernier Go Direct Respiration Belt";
-            document.getElementById("hw-order-code").innerText = status.order_code || "GDX-RB";
-            const sn = status.serial_number || "0K7014Z0";
-            document.getElementById("hw-serial").innerText = sn;
-            document.getElementById("footer-serial").innerText = sn;
-          } else {
-            hwBadge.className = "status-pill disconnected";
-            hwText.innerText = "SENSOR DISCONNECTED";
-          }
-
-          updateSensorActiveUI(status.active);
-          currentBpm = status.bpm || 14.0;
-          currentAmplitude = status.amplitude || 2.5;
-          currentNoise = status.noise_level || 0.05;
-          if (status.breath_count !== undefined) {
-            currentBreathCount = status.breath_count;
-            document.getElementById("rec-breaths").innerText = currentBreathCount;
-          }
-
-          if (status.tare_offset !== undefined) {
-            document.getElementById("force-tare-val").innerText = status.tare_offset.toFixed(3) + " N";
-          }
-
-          evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
-        });
-
-        socket.on("respiratory_data", (data) => {
-          if (browserGdxDevice && browserGdxDevice.opened) return;
-          processIncomingSample(data);
-        });
-      } catch (e) {
-        checkVercelOrCloudMode();
-      }
-
-      // Safety fallback check for serverless environments where WebSocket never connects
-      setTimeout(() => {
-        if (!socket || !socket.connected) {
-          checkVercelOrCloudMode();
-        }
-      }, 2000);
-    }
-
-    function processIncomingSample(data) {
-      totalPacketsReceived++;
-      document.getElementById("stat-packet-count").innerText = totalPacketsReceived.toLocaleString();
-
-      const val = data.value;                // Net expansion in Newtons (N)
-      const rawForce = data.raw_force;      // Raw transducer force in N
-      const tareOffset = data.tare_offset;
-      const timeStr = data.time_str;
-      const bpm = data.bpm;
-      const phase = data.phase;
-      const breaths = data.breath_count || 0;
-
-      // Update cached parameters
-      currentBpm = bpm;
-      if (data.amplitude) currentAmplitude = data.amplitude;
-      if (data.noise_level) currentNoise = data.noise_level;
-      currentBreathCount = breaths;
-
-      // Update force balance stats
-      document.getElementById("force-raw-val").innerText = rawForce.toFixed(3) + " N";
-      document.getElementById("force-tare-val").innerText = tareOffset.toFixed(3) + " N";
-      document.getElementById("force-net-val").innerText = val.toFixed(2) + " N";
-      document.getElementById("rec-breaths").innerText = breaths;
-
-      // Record sample in client-side session buffer
-      recordSample(data);
-
-      // Live Telemetry Readout
-      document.getElementById("hud-disp-val").innerText = val.toFixed(2);
-
-      const delta = (val - lastSensorValue) * 10.0;
-      document.getElementById("hud-delta-val").innerText = (delta >= 0 ? "+" : "") + delta.toFixed(2) + " N/s";
-      lastSensorValue = val;
-
-      const motionDirEl = document.getElementById("hud-motion-dir");
-      if (delta > 0.08) motionDirEl.innerText = "Inhaling ↑";
-      else if (delta < -0.08) motionDirEl.innerText = "Exhaling ↓";
-      else motionDirEl.innerText = "Plateau ↔";
-
-      document.getElementById("hud-phase-val").innerText = phase;
-      document.getElementById("hud-rate-val").innerText = bpm > 0 ? bpm.toFixed(1) : "--";
-      document.getElementById("hud-period-val").innerText = bpm > 0 ? (60.0 / bpm).toFixed(2) : "--";
-
-      recentValues.push(val);
-      if (recentValues.length > 150) recentValues.shift();
-      const minVal = Math.min(...recentValues);
-      const maxVal = Math.max(...recentValues);
-      document.getElementById("hud-min-val").innerText = minVal.toFixed(1);
-      document.getElementById("hud-max-val").innerText = maxVal.toFixed(1);
-      document.getElementById("hud-range-val").innerText = (maxVal - minVal).toFixed(1);
-
-      // Dynamic Y-axis scaling for chart
-      if (chartInstance) {
-        const requiredMax = Math.max(4.0, Math.ceil(maxVal + 1.2));
-        if (chartInstance.options.scales.y.max !== requiredMax) {
-          chartInstance.options.scales.y.max = requiredMax;
-        }
-      }
-
-      // Chart Update
-      chartLabels.shift();
-      chartLabels.push(timeStr);
-      chartSignalData.shift();
-      chartSignalData.push(val);
-
-      if (chartInstance) chartInstance.update("none");
-
-      // Periodically update diagnostic assessment (every 10 ticks = 1 second)
-      if (totalPacketsReceived % 10 === 0) {
-        evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
-      }
-    }
-
-    function recordSample(data) {
-      const item = {
-        sample_index: data.sample_count,
-        timestamp_iso: new Date().toISOString(),
-        time_str: data.time_str,
-        elapsed_seconds: data.timestamp,
-        raw_force_n: data.raw_force,
-        tare_offset_n: data.tare_offset,
-        net_expansion_n: data.value,
-        respiration_rate_bpm: data.bpm,
-        phase: data.phase,
-        breath_count: data.breath_count || currentBreathCount
-      };
-      recordedSessionData.push(item);
-      updateRecordedCounters();
-    }
-
-    function updateRecordedCounters() {
-      const count = recordedSessionData.length;
-      const sec = (count * 0.1).toFixed(1);
-      const elCount = document.getElementById("rec-count");
-      const elDur = document.getElementById("rec-duration");
-      if (elCount) elCount.innerText = count.toLocaleString();
-      if (elDur) {
-        const m = String(Math.floor(count * 0.1 / 60)).padStart(2, "0");
-        const s = String(Math.floor((count * 0.1) % 60)).padStart(2, "0");
-        elDur.innerText = `${m}:${s}`;
-      }
-
-      const btnSummary = document.getElementById("btn-download-summary");
-      const btnTableCsv = document.getElementById("btn-table-download-csv");
-      const btnCsv = document.getElementById("btn-download-csv");
-      const btnHeaderCsv = document.getElementById("btn-header-csv");
-      const btnJson = document.getElementById("btn-download-json");
-      const isEnabled = (count > 0);
-
-      if (btnSummary) btnSummary.disabled = !isEnabled;
-      if (btnTableCsv) btnTableCsv.disabled = !isEnabled;
-      if (btnCsv) btnCsv.disabled = !isEnabled;
-      if (btnHeaderCsv) btnHeaderCsv.disabled = !isEnabled;
-      if (btnJson) btnJson.disabled = !isEnabled;
-    }
-
-    function downloadPhysicalSummaryCSV() {
-      window.location.href = "/api/export/summary-csv";
-    }
-
-    async function loadBreathSummary() {
-      try {
-        const res = await fetch("/api/export/summary-json");
-        if (!res.ok) return;
-        const data = await res.json();
-        renderBreathTable(data.cycles || []);
-      } catch (e) {
-        console.error("Error loading breath summary:", e);
-      }
-    }
-
-    function renderBreathTable(cycles) {
-      const tbody = document.getElementById("breath-table-body");
-      const badgeCount = document.getElementById("summary-badge-count");
-      if (badgeCount) {
-        badgeCount.innerText = `${cycles.length} Breaths Analyzed`;
-      }
-      const btnTableCsv = document.getElementById("btn-table-download-csv");
-      if (btnTableCsv) {
-        btnTableCsv.disabled = (cycles.length === 0);
-      }
-
-      if (!tbody) return;
-      if (!cycles || cycles.length === 0) {
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="12" style="text-align: center; color: var(--text-muted); padding: 24px;">
-              No completed breath cycles analyzed yet. Complete a recording session to view the physical breakdown.
-            </td>
-          </tr>
-        `;
-        return;
-      }
-
-      let html = "";
-      cycles.forEach((c) => {
-        let badgeClass = "eupnea";
-        const clsLower = (c.classification || "").toLowerCase();
-        if (clsLower.includes("sigh")) badgeClass = "sigh";
-        else if (clsLower.includes("deep")) badgeClass = "deep";
-        else if (clsLower.includes("pause") || clsLower.includes("hold")) badgeClass = "pause";
-        else if (clsLower.includes("rapid") || clsLower.includes("catch-up")) badgeClass = "rapid";
-        else if (clsLower.includes("shallow")) badgeClass = "shallow";
-
-        html += `
-          <tr>
-            <td class="mono-cell" style="color: #38bdf8; font-weight: 700;">#${c.breath_number}</td>
-            <td class="mono-cell" style="font-size: 0.76rem; color: var(--text-secondary);">${c.start_clock} → ${c.end_clock}</td>
-            <td class="mono-cell">${c.start_time_s.toFixed(1)}s - ${c.end_time_s.toFixed(1)}s</td>
-            <td class="mono-cell" style="color: #f1f5f9; font-weight: 700;">${c.cycle_duration_s.toFixed(1)} s</td>
-            <td class="mono-cell" style="color: ${c.respiration_rate_bpm > 20 ? '#f87171' : c.respiration_rate_bpm < 10 ? '#fbbf24' : '#34d399'}; font-weight: 700;">${c.respiration_rate_bpm.toFixed(1)}</td>
-            <td class="mono-cell">${c.inhale_duration_s.toFixed(1)} s</td>
-            <td class="mono-cell">${c.exhale_duration_s.toFixed(1)} s</td>
-            <td class="mono-cell" style="color: #94a3b8;">${c.ie_ratio}</td>
-            <td class="mono-cell" style="color: #64748b;">${c.baseline_force_n.toFixed(2)} N</td>
-            <td class="mono-cell" style="color: #f8fafc;">${c.peak_force_n.toFixed(2)} N</td>
-            <td class="mono-cell" style="color: #38bdf8; font-weight: 700;">+${c.net_excursion_n.toFixed(2)} N</td>
-            <td><span class="badge-pattern ${badgeClass}">${c.classification}</span></td>
-          </tr>
-        `;
-      });
-      tbody.innerHTML = html;
-    }
-
-    function downloadSessionCSV() {
-      if (recordedSessionData.length === 0) {
-        alert("No session data recorded yet. Click 'Start Recording' to capture physical belt breathing data.");
-        return;
-      }
-
-      const now = new Date();
-      const dateTag = now.toISOString().slice(0, 10).replace(/-/g, "") + "_" +
-        now.toTimeString().slice(0, 8).replace(/:/g, "");
-      const serial = document.getElementById("hw-serial").innerText || "0K7014Z0";
-      const filename = `breathing_pattern_${serial}_${dateTag}.csv`;
-
-      // Compose CSV with metadata headers
-      let csvContent = "# RESPITRACK // Vernier Go Direct Respiration Belt Breathing Pattern Export\n";
-      csvContent += `# Device: Vernier Go Direct Respiration Belt (GDX-RB)\n`;
-      csvContent += `# Serial Number: ${serial}\n`;
-      csvContent += `# Export Timestamp: ${now.toLocaleString()}\n`;
-      csvContent += `# Total Samples: ${recordedSessionData.length}\n`;
-      csvContent += `# Total Breaths Detected: ${currentBreathCount}\n`;
-      csvContent += `# Duration: ${(recordedSessionData.length * 0.1).toFixed(1)} seconds\n`;
-      csvContent += `# Sampling Frequency: 10.0 Hz (100 ms intervals)\n`;
-      csvContent += `# Calibration Formula: Net Expansion Force (N) = max(0, Raw Force - Tare Offset)\n`;
-      csvContent += "#\n";
-      csvContent += "sample_index,timestamp_iso,time_str,elapsed_seconds,raw_force_n,tare_offset_n,net_expansion_n,respiration_rate_bpm,phase,breath_count\n";
-
-      for (const r of recordedSessionData) {
-        csvContent += `${r.sample_index},"${r.timestamp_iso}","${r.time_str}",${r.elapsed_seconds},${r.raw_force_n},${r.tare_offset_n},${r.net_expansion_n},${r.respiration_rate_bpm},"${r.phase}",${r.breath_count}\n`;
-      }
-
-      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-
-    function downloadSessionJSON() {
-      if (recordedSessionData.length === 0) {
-        alert("No session data recorded yet. Click 'Start Recording' to capture physical belt breathing data.");
-        return;
-      }
-
-      const now = new Date();
-      const dateTag = now.toISOString().slice(0, 10).replace(/-/g, "") + "_" +
-        now.toTimeString().slice(0, 8).replace(/:/g, "");
-      const serial = document.getElementById("hw-serial").innerText || "0K7014Z0";
-      const filename = `breathing_pattern_${serial}_${dateTag}.json`;
-
-      const payload = {
-        system: "RESPITRACK",
-        device: "Vernier Go Direct Respiration Belt",
-        model: "GDX-RB",
-        serial_number: serial,
-        export_timestamp: now.toISOString(),
-        sampling_frequency_hz: 10.0,
-        total_samples: recordedSessionData.length,
-        total_breaths_detected: currentBreathCount,
-        duration_seconds: parseFloat((recordedSessionData.length * 0.1).toFixed(1)),
-        samples: recordedSessionData
-      };
-
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }
-
-    function clearSessionRecording() {
-      if (recordedSessionData.length > 0 && !confirm("Clear all recorded breathing pattern samples?")) {
-        return;
-      }
-      recordedSessionData = [];
-      currentBreathCount = 0;
-      document.getElementById("rec-breaths").innerText = "0";
-      updateRecordedCounters();
-      if (socket && socket.connected) {
-        socket.emit("clear_recording");
-      }
-    }
-
-    // ==========================================
-    // --- Direct Browser Hardware & Cloud Engine ---
-    // ==========================================
-    let browserGdxDevice = null;
-    let browserTareOffset = 0.0;
-    let browserSampleCount = 0;
-    let browserStartTime = null;
-    let lastRawForce = 0.0;
-    let lastBpm = 14.0;
-    let browserBreathCount = 0;
-    let browserPhase = "Exhale";
-    let forceFilterWindow = [];
-    let lastFilteredForce = 0.0;
-    let peakState = "seeking_peak";
-    let lastPeakTime = 0;
-
-    async function connectBrowserBelt(useBluetooth = false) {
-      if (typeof godirect === 'undefined') {
-        alert("Vernier GoDirect browser library is still loading. Please check your internet connection and try again.");
-        return;
-      }
-
-      if (!useBluetooth && !navigator.hid) {
-        alert("WebHID is not supported in this browser.\n\nPlease open this page in Google Chrome, Microsoft Edge, or Opera to connect your USB belt directly.");
-        return;
-      }
-
-      if (useBluetooth && !navigator.bluetooth) {
-        alert("Web Bluetooth is not supported in this browser.\n\nPlease open this page in Google Chrome, Microsoft Edge, or Opera to connect your belt wirelessly.");
-        return;
-      }
-
-      try {
-        // Disconnect existing browser session if any
-        if (browserGdxDevice) {
-          try { await browserGdxDevice.close(); } catch(e) {}
-          browserGdxDevice = null;
-        }
-        if (cloudPlaybackInterval) {
-          stopDemoPlayback();
-        }
-
-        const modeStr = useBluetooth ? "Bluetooth BLE" : "USB HID";
-        console.log(`[WebHID/BLE] Requesting Vernier Go Direct device via ${modeStr}...`);
-
-        // Prompts native browser device chooser
-        const device = await godirect.selectDevice(useBluetooth);
-        if (!device) return;
-
-        browserGdxDevice = device;
-        activeConnectionMode = useBluetooth ? "browser-ble" : "browser-hid";
-        isHardwareConnected = true;
-
-        // Extract metadata
-        const sn = device.serialNumber || "0K7014Z0";
-        const devName = device.name || "Vernier Go Direct Respiration Belt";
-        const orderCode = device.orderCode || "GDX-RB";
-
-        // Update UI Badges
-        const hwBadge = document.getElementById("hw-status-badge");
-        const hwText = document.getElementById("hw-status-text");
-        hwBadge.className = "status-pill connected";
-        hwText.innerText = `VERNIER ${orderCode} (${useBluetooth ? 'BLE' : 'USB'})`;
-
-        const connBadge = document.getElementById("conn-mode-badge");
-        if (connBadge) {
-          connBadge.innerText = useBluetooth ? "BROWSER BLE" : "BROWSER WEBHID";
-          connBadge.style.color = "var(--status-active)";
-        }
-
-        document.getElementById("hw-device-name").innerText = devName;
-        document.getElementById("hw-order-code").innerText = orderCode;
-        document.getElementById("hw-serial").innerText = sn;
-        document.getElementById("footer-serial").innerText = sn;
-        document.getElementById("btn-rescan-text").innerText = "Disconnect";
-
-        // Enable Force (Channel 1) and Respiration Rate (Channel 2)
-        device.sensors.forEach(s => {
-          const nameLower = (s.name || "").toLowerCase();
-          if (nameLower.includes("force") || s.number === 1) s.setEnabled(true);
-          if (nameLower.includes("rate") || nameLower.includes("respiration") || s.number === 2) s.setEnabled(true);
-        });
-
-        // Initialize streaming counters
-        browserStartTime = Date.now();
-        browserSampleCount = 0;
-        browserBreathCount = recordedSessionData.length > 0 ? (recordedSessionData[recordedSessionData.length - 1].breath_count || 0) : 0;
-
-        // Start measurement sampling at 10 Hz (100 ms period)
-        device.start(100);
-        updateSensorActiveUI(true);
-
-        // Attach event listener
-        device.sensors.forEach(sensor => {
-          sensor.on('value-changed', (s) => {
-            handleBrowserSensorReading(s);
-          });
-        });
-
-        console.log(`[WebHID/BLE] Streaming active for ${devName} (${sn}) via ${modeStr}.`);
-      } catch (err) {
-        console.error("Browser device connection failed:", err);
-        if (err.name !== "NotFoundError" && !err.message.includes("cancelled") && !err.message.includes("No device selected")) {
-          alert("Could not connect to Vernier belt: " + err.message);
-        }
-      }
-    }
-
-    function handleBrowserSensorReading(sensor) {
-      const nameLower = (sensor.name || "").toLowerCase();
-
-      // Channel 2: Respiration Rate (BPM)
-      if (nameLower.includes("rate") || nameLower.includes("respiration") || sensor.number === 2) {
-        if (sensor.value && sensor.value > 0) {
-          lastBpm = sensor.value;
-        }
-        return;
-      }
-
-      // Channel 1: Force Transducer (N)
-      if (nameLower.includes("force") || sensor.number === 1) {
-        lastRawForce = sensor.value;
-        browserSampleCount++;
-
-        const elapsed = (Date.now() - (browserStartTime || Date.now())) / 1000.0;
-        const now = new Date();
-        const timeStr = now.toTimeString().slice(0, 8) + "." + Math.floor(now.getMilliseconds() / 100);
-
-        // Net excursion force
-        const netExpansion = Math.max(0, lastRawForce - browserTareOffset);
-
-        // Low-pass filter for smooth motion direction & phase detection
-        forceFilterWindow.push(netExpansion);
-        if (forceFilterWindow.length > 5) forceFilterWindow.shift();
-        const smoothed = forceFilterWindow.reduce((a, b) => a + b, 0) / forceFilterWindow.length;
-        const delta = (smoothed - lastFilteredForce) * 10.0;
-        lastFilteredForce = smoothed;
-
-        if (delta > 0.08) browserPhase = "Inhale";
-        else if (delta < -0.08) browserPhase = "Exhale";
-        else browserPhase = "Plateau";
-
-        // Real-time breath cycle detection
-        if (browserPhase === "Exhale" && peakState === "seeking_peak") {
-          peakState = "seeking_trough";
-          browserBreathCount++;
-          const curTime = Date.now();
-          if (lastPeakTime > 0) {
-            const periodSec = (curTime - lastPeakTime) / 1000.0;
-            if (periodSec >= 1.5 && periodSec <= 15.0) {
-              const instBpm = 60.0 / periodSec;
-              lastBpm = Math.round((lastBpm * 0.7 + instBpm * 0.3) * 10) / 10;
-            }
-          }
-          lastPeakTime = curTime;
-        } else if (browserPhase === "Inhale" && peakState === "seeking_trough") {
-          peakState = "seeking_peak";
-        }
-
-        // Send into high-fidelity oscilloscope & radiation oncology gating pipeline
-        processIncomingSample({
-          timestamp: elapsed,
-          time_str: timeStr,
-          value: netExpansion,
-          raw_force: lastRawForce,
-          tare_offset: browserTareOffset,
-          phase: browserPhase,
-          bpm: lastBpm,
-          sample_count: browserSampleCount,
-          breath_count: browserBreathCount,
-          amplitude: currentAmplitude,
-          noise_level: currentNoise
-        });
-      }
-    }
-
-    async function disconnectOrRescanHardware() {
-      if (browserGdxDevice) {
-        try {
-          await browserGdxDevice.close();
-        } catch(e) {}
-        browserGdxDevice = null;
-        activeConnectionMode = "idle";
-        isHardwareConnected = false;
-        updateSensorActiveUI(false);
-
-        const hwBadge = document.getElementById("hw-status-badge");
-        const hwText = document.getElementById("hw-status-text");
-        hwBadge.className = "status-pill disconnected";
-        hwText.innerText = "SENSOR DISCONNECTED";
-
-        const connBadge = document.getElementById("conn-mode-badge");
-        if (connBadge) {
-          connBadge.innerText = "DISCONNECTED";
-          connBadge.style.color = "var(--text-muted)";
-        }
-        document.getElementById("btn-rescan-text").innerText = "Rescan / Demo";
-        return;
-      }
-
-      if (socket && socket.connected) {
-        socket.emit("reconnect_sensor");
-        return;
-      }
-
-      // If running on Vercel without hardware, toggle authentic session demo playback
-      toggleDemoPlayback();
-    }
-
-    function toggleDemoPlayback() {
-      if (cloudPlaybackInterval) {
-        stopDemoPlayback();
-      } else {
-        startDemoPlayback();
-      }
-    }
-
-    function startDemoPlayback() {
-      if (cloudPlaybackInterval) clearInterval(cloudPlaybackInterval);
-      if (cachedDemoSamples.length === 0) {
-        checkVercelOrCloudMode().then(() => {
-          if (cachedDemoSamples.length > 0) startDemoPlayback();
-        });
-        return;
-      }
-
-      activeConnectionMode = "replay";
-      updateSensorActiveUI(true);
-
-      const connBadge = document.getElementById("conn-mode-badge");
-      if (connBadge) {
-        connBadge.innerText = "DEMO REPLAY (10 Hz)";
-        connBadge.style.color = "var(--accent-amber)";
-      }
-
-      const hwBadge = document.getElementById("hw-status-badge");
-      const hwText = document.getElementById("hw-status-text");
-      hwBadge.className = "status-pill connected";
-      hwText.innerText = "VERNIER 0K7014Z0 REPLAY";
-
-      document.getElementById("btn-rescan-text").innerText = "Stop Demo";
-
-      cloudPlaybackInterval = setInterval(() => {
-        if (cloudPlaybackIndex >= cachedDemoSamples.length) {
-          cloudPlaybackIndex = 0; // loop seamlessly
-        }
-        const sample = cachedDemoSamples[cloudPlaybackIndex];
-        cloudPlaybackIndex++;
-
-        processIncomingSample({
-          timestamp: sample.elapsed_seconds,
-          time_str: sample.time_str,
-          value: sample.net_expansion_n,
-          raw_force: sample.raw_force_n,
-          tare_offset: sample.tare_offset_n,
-          phase: sample.phase,
-          bpm: sample.respiration_rate_bpm,
-          sample_count: sample.sample_index,
-          breath_count: sample.breath_count,
-          amplitude: currentAmplitude,
-          noise_level: currentNoise
-        });
-      }, 100); // 10 Hz
-    }
-
-    function stopDemoPlayback() {
-      if (cloudPlaybackInterval) {
-        clearInterval(cloudPlaybackInterval);
-        cloudPlaybackInterval = null;
-      }
-      activeConnectionMode = "idle";
-      updateSensorActiveUI(false);
-      document.getElementById("btn-rescan-text").innerText = "Rescan / Demo";
-      const connBadge = document.getElementById("conn-mode-badge");
-      if (connBadge) {
-        connBadge.innerText = "STANDBY";
-        connBadge.style.color = "var(--text-muted)";
-      }
-    }
-
-    // Hardware Actions
-    function startSensor() {
-      if (browserGdxDevice && browserGdxDevice.opened) {
-        browserGdxDevice.start(100);
-        updateSensorActiveUI(true);
-        return;
-      }
-      if (socket && socket.connected) {
-        socket.emit("start_sensor");
-        return;
-      }
-      startDemoPlayback();
-    }
-
-    function stopSensor() {
-      if (browserGdxDevice && browserGdxDevice.opened) {
-        browserGdxDevice.stop();
-        updateSensorActiveUI(false);
-        return;
-      }
-      if (socket && socket.connected) {
-        socket.emit("stop_sensor");
-        return;
-      }
-      stopDemoPlayback();
-    }
-
-    function tareSensor() {
-      if (browserGdxDevice && browserGdxDevice.opened) {
-        browserTareOffset = lastRawForce;
-        document.getElementById("force-tare-val").innerText = browserTareOffset.toFixed(3) + " N";
-        return;
-      }
-      if (socket && socket.connected) {
-        socket.emit("tare_sensor");
-        return;
-      }
-      fetch("/api/tare", { method: "POST" })
-        .then(r => r.json())
-        .then(st => {
-          if (st.tare_offset !== undefined) {
-            document.getElementById("force-tare-val").innerText = st.tare_offset.toFixed(3) + " N";
-          }
-        })
-        .catch(() => {});
-    }
-
-    function reconnectHardware() {
-      disconnectOrRescanHardware();
-    }
-
-    function updateSensorActiveUI(active) {
-      isSensorStreaming = active;
-      const btnStart = document.getElementById("btn-start-sensor");
-      const btnStop = document.getElementById("btn-stop-sensor");
-      const badge = document.getElementById("sensor-status-badge");
-      const badgeText = document.getElementById("sensor-status-text");
-      const recDot = document.getElementById("rec-status-dot");
-      const recText = document.getElementById("rec-status-text");
-
-      if (active) {
-        btnStart.classList.add("is-active");
-        btnStart.disabled = true;
-        btnStop.disabled = false;
-        badge.className = "status-pill active";
-        badgeText.innerText = "STREAMING (10 Hz)";
-        if (recDot) recDot.className = "rec-pulse-dot";
-        if (recText) recText.innerText = "RECORDING ACTIVE";
-        if (!sessionStartTime) {
-          sessionStartTime = Date.now();
-        }
-      } else {
-        btnStart.classList.remove("is-active");
-        btnStart.disabled = false;
-        btnStop.disabled = true;
-        badge.className = "status-pill";
-        badgeText.innerText = "SENSOR STANDBY";
-        if (recDot) recDot.className = "rec-idle-dot";
-        if (recText) recText.innerText = "SESSION BUFFER IDLE";
-        loadBreathSummary();
-      }
-      evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
-    }
-
-    function resetWaveform() {
-      chartLabels = [];
-      chartSignalData = [];
-      for (let i = 0; i < MAX_CHART_SAMPLES; i++) {
-        chartLabels.push("");
-        chartSignalData.push(null);
-      }
-      if (chartInstance) {
-        chartInstance.data.labels = chartLabels;
-        chartInstance.data.datasets[0].data = chartSignalData;
-        chartInstance.update();
-      }
-      recentValues = [];
-    }
-
-    window.addEventListener("DOMContentLoaded", () => {
-      initChart();
-      initSocketConnection();
-      evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
-      updateRecordedCounters();
-      loadBreathSummary();
-    });
-  </script>
+  <!-- Client-side Research Logic -->
+  <script src="/static/research_dashboard.js"></script>
 </body>
 
 </html>
