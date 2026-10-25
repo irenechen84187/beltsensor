@@ -22,6 +22,8 @@ let sessionStartTime = null;
 // Experiment Condition & Metadata
 let currentExperimentCondition = "Normal"; // 'Normal', 'Controlled', 'Irregular'
 let currentSessionNotes = "";
+let currentSessionId = null;
+let currentActiveLoadedSession = null;
 
 // Time-series sample buffer (10 Hz raw & net force data)
 let recordedSessionData = [];
@@ -862,12 +864,23 @@ function loadSavedSession(sessionId) {
     const found = allSessions.find(s => s.sessionId === sessionId);
     if (!found) return;
 
+    currentActiveLoadedSession = found;
+    currentSessionId = found.sessionId;
     breathCycles = found.cycles || [];
     setExperimentCondition(found.condition);
-    currentBreathCount = found.breathCount || 0;
-    document.getElementById("rec-breaths").innerText = currentBreathCount;
+    currentBreathCount = found.breathCount || (breathCycles.length);
+    const recBreathsEl = document.getElementById("rec-breaths");
+    if (recBreathsEl) recBreathsEl.innerText = currentBreathCount;
 
+    renderBreathTable(breathCycles);
     evaluateAllCyclesVariability();
+
+    // Enable export buttons for loaded session data
+    ["btn-download-summary", "btn-download-csv", "btn-download-json", "btn-download-pdf", "btn-table-download-csv"].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.disabled = false;
+    });
+
     alert(`Loaded session ${sessionId} (${found.condition} Breathing) with ${breathCycles.length} analyzed cycles.`);
   } catch (e) {
     console.error("Error loading session:", e);
@@ -1047,414 +1060,455 @@ function exportSavedSessionPDF(sessionId) {
 // 9. PDF RESEARCH REPORT GENERATION (jsPDF) - MULTI-PAGE & ENHANCED
 // ========================================================
 function exportSessionPDF(targetSession = null) {
-  if (typeof window.jspdf === "undefined" || !window.jspdf.jsPDF) {
-    alert("jsPDF library is loading. Please verify internet connection and retry.");
-    return;
-  }
+  try {
+    const jsPDFConstructor = (typeof window !== "undefined" && window.jspdf && window.jspdf.jsPDF) 
+      ? window.jspdf.jsPDF 
+      : (typeof window !== "undefined" && typeof window.jsPDF === "function" ? window.jsPDF : null);
 
-  // Resolve session target: historical session object OR live session
-  let target = null;
-  if (typeof targetSession === "string") {
-    let allSessions = [];
-    try { allSessions = JSON.parse(localStorage.getItem("respi_experiment_sessions") || "[]"); } catch (e) {}
-    target = allSessions.find(s => s.sessionId === targetSession);
-  } else if (targetSession && typeof targetSession === "object" && !targetSession.preventDefault) {
-    target = targetSession;
-  }
+    if (!jsPDFConstructor) {
+      alert("jsPDF library is loading. Please check your internet connection or retry in a moment.");
+      return;
+    }
 
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageWidth = doc.internal.pageSize.getWidth();   // 210 mm
-  const pageHeight = doc.internal.pageSize.getHeight(); // 297 mm
-  const contentWidth = pageWidth - 28;                  // 182 mm
-  const now = new Date();
+    // Resolve session target: historical session object OR live session
+    let target = null;
+    if (typeof targetSession === "string") {
+      let allSessions = [];
+      try { allSessions = JSON.parse(localStorage.getItem("respi_experiment_sessions") || "[]"); } catch (e) {}
+      target = allSessions.find(s => s.sessionId === targetSession);
+    } else if (targetSession && typeof targetSession === "object" && !targetSession.preventDefault && targetSession.cycles) {
+      target = targetSession;
+    } else if (currentActiveLoadedSession && recordedSessionData.length === 0 && breathCycles.length > 0) {
+      target = currentActiveLoadedSession;
+    }
 
-  // Extract session metadata & statistics
-  const sessionId = target ? target.sessionId : (currentSessionId || ("LIVE-" + Date.now().toString(36).toUpperCase()));
-  const condition = (target ? target.condition : currentExperimentCondition).toUpperCase();
-  const notes = target ? target.notes : (currentSessionNotes || "Standard resting trial");
-  const serial = target ? (target.serial || "0K7014Z0") : (document.getElementById("hw-serial").innerText || "0K7014Z0");
-  const durationSec = target ? target.durationSec : parseFloat((recordedSessionData.length * 0.1).toFixed(1));
-  const sampleCount = target ? (target.sampleCount || Math.round(target.durationSec * 10)) : recordedSessionData.length;
-  const cycles = target ? (target.cycles || []) : breathCycles;
+    if (!target && recordedSessionData.length === 0 && breathCycles.length === 0) {
+      alert("No respiratory data recorded yet. Please click Start to record breathing data, or load a session from the comparison table below.");
+      return;
+    }
 
-  const avgRate = target ? String(target.avgBpm) : (document.getElementById("res-avg-rate") ? document.getElementById("res-avg-rate").innerText : "--");
-  const avgAmp = target ? String(target.avgAmpN) : (document.getElementById("res-avg-amp") ? document.getElementById("res-avg-amp").innerText : "--");
-  const avgDur = target && cycles.length > 0 ? (cycles.reduce((a, c) => a + (c.cycle_duration_s || 0), 0) / cycles.length).toFixed(2) : (document.getElementById("res-avg-dur") ? document.getElementById("res-avg-dur").innerText : "--");
-  const cvAmp = target ? String(target.cvAmpPct) : (document.getElementById("res-cv-amp") ? document.getElementById("res-cv-amp").innerText : "--");
-  const cvDur = target ? String(target.cvDurPct) : (document.getElementById("res-cv-dur") ? document.getElementById("res-cv-dur").innerText : "--");
-  const stablePct = target ? String(target.stablePct) : (document.getElementById("res-stable-pct") ? document.getElementById("res-stable-pct").innerText : "--");
-  const qualPct = target ? "98" : (document.getElementById("res-quality-pct") ? document.getElementById("res-quality-pct").innerText : "100");
-  const recordedAtStr = target ? target.recordedAt : now.toLocaleString();
-  const thresholds = (target && target.thresholds) ? target.thresholds : researchThresholds;
+    const doc = new jsPDFConstructor({ orientation: "portrait", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();   // 210 mm
+    const pageHeight = doc.internal.pageSize.getHeight(); // 297 mm
+    const contentWidth = pageWidth - 28;                  // 182 mm
+    const now = new Date();
 
-  // 1. Header Banner
-  doc.setFillColor(15, 23, 42); // slate-900
-  doc.rect(0, 0, pageWidth, 26, "F");
+    // Extract session metadata & statistics safely
+    const sessionId = (target && target.sessionId) 
+      ? target.sessionId 
+      : ("LIVE_" + now.toISOString().slice(0, 10).replace(/-/g, "") + "_" + now.toTimeString().slice(0, 8).replace(/:/g, ""));
+    const condition = String(target && target.condition ? target.condition : currentExperimentCondition).toUpperCase();
+    const notes = String((target && target.notes) || currentSessionNotes || "Standard resting trial");
+    const serialEl = document.getElementById("hw-serial");
+    const serial = String((target && target.serial) || (serialEl ? serialEl.innerText : "0K7014Z0"));
+    const durationSec = target ? target.durationSec : parseFloat((recordedSessionData.length * 0.1).toFixed(1));
+    const sampleCount = target ? (target.sampleCount || Math.round(target.durationSec * 10)) : recordedSessionData.length;
+    const cycles = (target && target.cycles) ? target.cycles : (breathCycles || []);
 
-  doc.setFillColor(56, 189, 248); // sky-400 accent line
-  doc.rect(0, 26, pageWidth, 1.2, "F");
+    const elAvgRate = document.getElementById("res-avg-rate");
+    const elAvgAmp = document.getElementById("res-avg-amp");
+    const elAvgDur = document.getElementById("res-avg-dur");
+    const elCvAmp = document.getElementById("res-cv-amp");
+    const elCvDur = document.getElementById("res-cv-dur");
+    const elStablePct = document.getElementById("res-stable-pct");
+    const elQualPct = document.getElementById("res-quality-pct");
 
-  doc.setTextColor(56, 189, 248);
-  doc.setFontSize(13);
-  doc.setFont("helvetica", "bold");
-  doc.text("RESPITRACK // RESPIRATORY MOTION RESEARCH REPORT", 14, 11);
+    const avgRate = target ? String(target.avgBpm) : (elAvgRate ? elAvgRate.innerText : "--");
+    const avgAmp = target ? String(target.avgAmpN) : (elAvgAmp ? elAvgAmp.innerText : "--");
+    const avgDur = target && cycles.length > 0 ? (cycles.reduce((a, c) => a + (c.cycle_duration_s || 0), 0) / cycles.length).toFixed(2) : (elAvgDur ? elAvgDur.innerText : "--");
+    const cvAmp = target ? String(target.cvAmpPct) : (elCvAmp ? elCvAmp.innerText : "--");
+    const cvDur = target ? String(target.cvDurPct) : (elCvDur ? elCvDur.innerText : "--");
+    const stablePct = target ? String(target.stablePct) : (elStablePct ? elStablePct.innerText : "--");
+    const qualPct = target ? "98" : (elQualPct ? elQualPct.innerText : "100");
+    const recordedAtStr = String((target && (target.recordedAt || target.export_timestamp || target.export_time)) || now.toLocaleString());
+    const thresholds = (target && target.thresholds) ? target.thresholds : researchThresholds;
 
-  doc.setTextColor(203, 213, 225);
-  doc.setFontSize(8);
-  doc.setFont("helvetica", "normal");
-  doc.text("Vernier Go Direct Respiration Belt (GDX-RB) • Radiation Treatment Planning Analysis", 14, 18);
+    // 1. Header Banner
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(0, 0, pageWidth, 26, "F");
 
-  // Condition Badge
-  const badgeColor = condition === "IRREGULAR" ? [239, 68, 68] : (condition === "CONTROLLED" ? [59, 130, 246] : [34, 197, 94]);
-  doc.setFillColor(badgeColor[0], badgeColor[1], badgeColor[2]);
-  doc.roundedRect(pageWidth - 62, 6, 48, 14, 2, 2, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(8.5);
-  doc.setFont("helvetica", "bold");
-  doc.text(`${condition} TRIAL`, pageWidth - 38, 15, { align: "center" });
+    doc.setFillColor(56, 189, 248); // sky-400 accent line
+    doc.rect(0, 26, pageWidth, 1.2, "F");
 
-  // 2. Metadata Grid
-  let y = 33;
-  doc.setTextColor(15, 23, 42);
-  doc.setFontSize(9.5);
-  doc.setFont("helvetica", "bold");
-  doc.text("1. EXPERIMENTAL SESSION PROTOCOL & SENSOR METADATA", 14, y);
-
-  y += 4;
-  doc.setFillColor(248, 250, 252);
-  doc.setDrawColor(203, 213, 225);
-  doc.roundedRect(14, y, contentWidth, 24, 1.5, 1.5, "FD");
-
-  doc.setFontSize(7.8);
-  const col1 = 18, col2 = 80, col3 = 142;
-
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(71, 85, 105);
-  doc.text("Session ID:", col1, y + 5.5);
-  doc.setTextColor(15, 23, 42);
-  doc.setFont("helvetica", "bold");
-  doc.text(sessionId, col1 + 18, y + 5.5);
-
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(71, 85, 105);
-  doc.text("Sensor Hardware:", col1, y + 11.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`Vernier GDX-RB (S/N: ${serial})`, col1 + 25, y + 11.5);
-
-  doc.setTextColor(71, 85, 105);
-  doc.text("Sampling Rate:", col1, y + 17.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text("10.0 Hz (100 ms interval)", col1 + 25, y + 17.5);
-
-  // Column 2
-  doc.setTextColor(71, 85, 105);
-  doc.text("Duration:", col2, y + 5.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`${durationSec}s (${sampleCount} samples)`, col2 + 20, y + 5.5);
-
-  doc.setTextColor(71, 85, 105);
-  doc.text("Breath Cycles:", col2, y + 11.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`${cycles.length} detected`, col2 + 20, y + 11.5);
-
-  doc.setTextColor(71, 85, 105);
-  doc.text("Signal Quality:", col2, y + 17.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`${qualPct}%`, col2 + 20, y + 17.5);
-
-  // Column 3
-  doc.setTextColor(71, 85, 105);
-  doc.text("Recorded:", col3, y + 5.5);
-  doc.setTextColor(15, 23, 42);
-  doc.text(recordedAtStr.slice(0, 22), col3 + 16, y + 5.5);
-
-  doc.setTextColor(71, 85, 105);
-  doc.text("Protocol:", col3, y + 11.5);
-  doc.setTextColor(15, 23, 42);
-  const truncatedNotes = notes.length > 28 ? notes.slice(0, 26) + "..." : notes;
-  doc.text(truncatedNotes, col3 + 16, y + 11.5);
-
-  // 3. Quantitative Metrics Table
-  y += 30;
-  doc.setTextColor(15, 23, 42);
-  doc.setFontSize(9.5);
-  doc.setFont("helvetica", "bold");
-  doc.text("2. QUANTITATIVE RESPIRATORY METRICS & VARIABILITY (CV%)", 14, y);
-
-  y += 4;
-  const cardW = (contentWidth - 9) / 4;
-  const cardH = 15;
-
-  const metricsArr = [
-    { label: "MEAN RESPIRATION RATE", val: `${avgRate} BPM`, sub: "Cycle frequency" },
-    { label: "MEAN TIDAL AMPLITUDE", val: `${avgAmp} N`, sub: "Peak-to-trough force" },
-    { label: "AMPLITUDE VARIABILITY", val: `${cvAmp}%`, sub: `CV_amp (limit: ${thresholds.cvAmpLimit}%)`, warn: parseFloat(cvAmp) > thresholds.cvAmpLimit },
-    { label: "DURATION VARIABILITY", val: `${cvDur}%`, sub: `CV_dur (limit: ${thresholds.cvDurLimit}%)`, warn: parseFloat(cvDur) > thresholds.cvDurLimit }
-  ];
-
-  metricsArr.forEach((m, idx) => {
-    const cx = 14 + idx * (cardW + 3);
-    doc.setFillColor(m.warn ? 254 : 241, m.warn ? 242 : 245, m.warn ? 242 : 249);
-    doc.setDrawColor(m.warn ? 248 : 226, m.warn ? 113 : 232, m.warn ? 113 : 240);
-    doc.roundedRect(cx, y, cardW, cardH, 1.5, 1.5, "FD");
-
-    doc.setFontSize(6.2);
+    doc.setTextColor(56, 189, 248);
+    doc.setFontSize(13);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(m.warn ? 185 : 71, m.warn ? 28 : 85, m.warn ? 28 : 105);
-    doc.text(m.label, cx + 3, y + 4.5);
+    doc.text("RESPITRACK // RESPIRATORY MOTION RESEARCH REPORT", 14, 11);
 
-    doc.setFontSize(10.5);
-    doc.setTextColor(m.warn ? 220 : 15, m.warn ? 38 : 23, m.warn ? 38 : 42);
-    doc.text(m.val, cx + 3, y + 10.5);
-
-    doc.setFontSize(5.8);
+    doc.setTextColor(203, 213, 225);
+    doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
-    doc.setTextColor(m.warn ? 185 : 100, m.warn ? 28 : 116, m.warn ? 28 : 139);
-    doc.text(m.sub, cx + 3, y + 13.5);
-  });
+    doc.text("Vernier Go Direct Respiration Belt (GDX-RB) • Radiation Treatment Planning Analysis", 14, 18);
 
-  // Clinical Radiotherapy Suitability Assessment
-  y += cardH + 4;
-  const numCvAmp = parseFloat(cvAmp) || 0;
-  const numCvDur = parseFloat(cvDur) || 0;
-  const isCandidateGating = numCvAmp <= thresholds.cvAmpLimit && numCvDur <= thresholds.cvDurLimit;
+    // Condition Badge
+    const badgeColor = condition === "IRREGULAR" ? [239, 68, 68] : (condition === "CONTROLLED" ? [59, 130, 246] : [34, 197, 94]);
+    doc.setFillColor(badgeColor[0], badgeColor[1], badgeColor[2]);
+    doc.roundedRect(pageWidth - 62, 6, 48, 14, 2, 2, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "bold");
+    doc.text(`${condition} TRIAL`, pageWidth - 38, 15, { align: "center" });
 
-  doc.setFillColor(isCandidateGating ? 240 : 255, isCandidateGating ? 253 : 251, isCandidateGating ? 244 : 235);
-  doc.setDrawColor(isCandidateGating ? 74 : 245, isCandidateGating ? 222 : 158, isCandidateGating ? 128 : 11);
-  doc.roundedRect(14, y, contentWidth, 14, 1.5, 1.5, "FD");
-
-  doc.setFontSize(7.5);
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(isCandidateGating ? 21 : 180, isCandidateGating ? 128 : 83, isCandidateGating ? 61 : 9);
-  doc.text(`Radiotherapy Gating Evaluation • Stable Breathing Time: ${stablePct}%`, 18, y + 5);
-
-  doc.setFontSize(7);
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(30, 41, 59);
-  const evalText = isCandidateGating
-    ? `HIGH CONSISTENCY (CV < ${thresholds.cvAmpLimit}%): Patient motion conforms to reproducible eupneic breathing. Qualified for phase-based 4D-CT binning and linear accelerator beam gating.`
-    : `IRREGULAR MOTION DETECTED (CV > ${thresholds.cvAmpLimit}%): Exceeds standard 15% gating tolerance. Prone to 4D-CT phase-sorting artifacts (ghosting/blurring) and linear accelerator beam hold-offs. Recommended: Audio/visual biofeedback guidance or Deep Inspiration Breath Hold (DIBH).`;
-  doc.text(doc.splitTextToSize(evalText, contentWidth - 8), 18, y + 9.5);
-
-  // 4. Waveform Snapshot OR Excursion Card
-  y += 18;
-  if (!target && chartInstance) {
+    // 2. Metadata Grid
+    let y = 33;
     doc.setTextColor(15, 23, 42);
     doc.setFontSize(9.5);
     doc.setFont("helvetica", "bold");
-    doc.text("3. REAL-TIME RESPIRATORY BELT FORCE WAVEFORM (NEWTONS)", 14, y);
+    doc.text("1. EXPERIMENTAL SESSION PROTOCOL & SENSOR METADATA", 14, y);
 
-    y += 3.5;
-    try {
-      const imgData = chartInstance.toBase64Image();
-      const imgHeight = 44;
-      doc.addImage(imgData, "PNG", 14, y, contentWidth, imgHeight);
-      y += imgHeight + 5;
-    } catch (e) {
-      y += 8;
-    }
-  }
+    y += 4;
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(14, y, contentWidth, 24, 1.5, 1.5, "FD");
 
-  // 5. Irregularity Flags & Clinical Deviation Log
-  const irregularEvents = [];
-  cycles.forEach(c => {
-    const flags = [];
-    if (c.cycle_duration_s < 1.5) {
-      flags.push({ event: "Tachypnea / Catch-up", reason: `Cycle duration ${c.cycle_duration_s}s (< 1.5s)`, rtImpact: "Phase compression risk in 4D-CT binning" });
-    } else if (c.cycle_duration_s > 6.0) {
-      flags.push({ event: "Bradypneic Pause / Apnea", reason: `Cycle duration ${c.cycle_duration_s}s (> 6.0s)`, rtImpact: "Linear accelerator beam hold-off; potential baseline drift" });
-    }
-    if (c.net_excursion_n < 0.6) {
-      flags.push({ event: "Shallow Hypopnea", reason: `Excursion ${c.net_excursion_n}N (< 0.6N)`, rtImpact: "May fall below amplitude gating duty threshold" });
-    } else if (c.net_excursion_n > 12.0) {
-      flags.push({ event: "Deep Sigh / Spike", reason: `Excursion ${c.net_excursion_n}N (> 12.0N)`, rtImpact: "Exceeds planning gating envelope (target displacement)" });
-    }
-    if (c.classification && (c.classification.includes("Sigh") || c.classification.includes("Variation") || c.classification.includes("Catch-up") || c.classification.includes("Hold"))) {
-      if (!flags.some(f => f.event.includes(c.classification))) {
-        flags.push({ event: c.classification, reason: "Statistical deviation from session mean", rtImpact: "Intra-fraction target position variation" });
-      }
-    }
-    flags.forEach(f => {
-      irregularEvents.push({
-        breathNum: c.breath_number,
-        window: `${c.start_time_s.toFixed(1)} - ${c.end_time_s.toFixed(1)}s`,
-        event: f.event,
-        reason: f.reason,
-        rtImpact: f.rtImpact
-      });
+    doc.setFontSize(7.8);
+    const col1 = 18, col2 = 80, col3 = 142;
+
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(71, 85, 105);
+    doc.text("Session ID:", col1, y + 5.5);
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.text(sessionId, col1 + 18, y + 5.5);
+
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(71, 85, 105);
+    doc.text("Sensor Hardware:", col1, y + 11.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`Vernier GDX-RB (S/N: ${serial})`, col1 + 25, y + 11.5);
+
+    doc.setTextColor(71, 85, 105);
+    doc.text("Sampling Rate:", col1, y + 17.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text("10.0 Hz (100 ms interval)", col1 + 25, y + 17.5);
+
+    // Column 2
+    doc.setTextColor(71, 85, 105);
+    doc.text("Duration:", col2, y + 5.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${durationSec}s (${sampleCount} samples)`, col2 + 20, y + 5.5);
+
+    doc.setTextColor(71, 85, 105);
+    doc.text("Breath Cycles:", col2, y + 11.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${cycles.length} detected`, col2 + 20, y + 11.5);
+
+    doc.setTextColor(71, 85, 105);
+    doc.text("Signal Quality:", col2, y + 17.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${qualPct}%`, col2 + 20, y + 17.5);
+
+    // Column 3
+    doc.setTextColor(71, 85, 105);
+    doc.text("Recorded:", col3, y + 5.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(recordedAtStr.slice(0, 22), col3 + 16, y + 5.5);
+
+    doc.setTextColor(71, 85, 105);
+    doc.text("Protocol:", col3, y + 11.5);
+    doc.setTextColor(15, 23, 42);
+    const truncatedNotes = notes.length > 28 ? notes.slice(0, 26) + "..." : notes;
+    doc.text(truncatedNotes, col3 + 16, y + 11.5);
+
+    // 3. Quantitative Metrics Table
+    y += 30;
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("2. QUANTITATIVE RESPIRATORY METRICS & VARIABILITY (CV%)", 14, y);
+
+    y += 4;
+    const cardW = (contentWidth - 9) / 4;
+    const cardH = 15;
+
+    const metricsArr = [
+      { label: "MEAN RESPIRATION RATE", val: `${avgRate} BPM`, sub: "Cycle frequency" },
+      { label: "MEAN TIDAL AMPLITUDE", val: `${avgAmp} N`, sub: "Peak-to-trough force" },
+      { label: "AMPLITUDE VARIABILITY", val: `${cvAmp}%`, sub: `CV_amp (limit: ${thresholds.cvAmpLimit}%)`, warn: parseFloat(cvAmp) > thresholds.cvAmpLimit },
+      { label: "DURATION VARIABILITY", val: `${cvDur}%`, sub: `CV_dur (limit: ${thresholds.cvDurLimit}%)`, warn: parseFloat(cvDur) > thresholds.cvDurLimit }
+    ];
+
+    metricsArr.forEach((m, idx) => {
+      const cx = 14 + idx * (cardW + 3);
+      doc.setFillColor(m.warn ? 254 : 241, m.warn ? 242 : 245, m.warn ? 242 : 249);
+      doc.setDrawColor(m.warn ? 248 : 226, m.warn ? 113 : 232, m.warn ? 113 : 240);
+      doc.roundedRect(cx, y, cardW, cardH, 1.5, 1.5, "FD");
+
+      doc.setFontSize(6.2);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(m.warn ? 185 : 71, m.warn ? 28 : 85, m.warn ? 28 : 105);
+      doc.text(m.label, cx + 3, y + 4.5);
+
+      doc.setFontSize(10.5);
+      doc.setTextColor(m.warn ? 220 : 15, m.warn ? 38 : 23, m.warn ? 38 : 42);
+      doc.text(m.val, cx + 3, y + 10.5);
+
+      doc.setFontSize(5.8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(m.warn ? 185 : 100, m.warn ? 28 : 116, m.warn ? 28 : 139);
+      doc.text(m.sub, cx + 3, y + 13.5);
     });
-  });
 
-  // Check if we need space for Irregularity Section
-  if (y > 230) {
-    doc.addPage();
-    y = 20;
-  }
+    // Clinical Radiotherapy Suitability Assessment
+    y += cardH + 4;
+    const numCvAmp = parseFloat(cvAmp) || 0;
+    const numCvDur = parseFloat(cvDur) || 0;
+    const isCandidateGating = numCvAmp <= thresholds.cvAmpLimit && numCvDur <= thresholds.cvDurLimit;
 
-  doc.setTextColor(15, 23, 42);
-  doc.setFontSize(9.5);
-  doc.setFont("helvetica", "bold");
-  doc.text("4. IRREGULARITY FLAGS & CLINICAL DEVIATION LOG", 14, y);
-  y += 4;
+    doc.setFillColor(isCandidateGating ? 240 : 255, isCandidateGating ? 253 : 251, isCandidateGating ? 244 : 235);
+    doc.setDrawColor(isCandidateGating ? 74 : 245, isCandidateGating ? 222 : 158, isCandidateGating ? 128 : 11);
+    doc.roundedRect(14, y, contentWidth, 14, 1.5, 1.5, "FD");
 
-  if (irregularEvents.length === 0) {
-    doc.setFillColor(240, 253, 244);
-    doc.setDrawColor(74, 222, 128);
-    doc.roundedRect(14, y, contentWidth, 10, 1.5, 1.5, "FD");
     doc.setFontSize(7.5);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(21, 128, 61);
-    doc.text("✓ NO CLINICAL IRREGULARITIES DETECTED: All recorded cycles conform to normal eupneic limits (CV < 15%).", 18, y + 6.5);
-    y += 14;
-  } else {
-    doc.setFillColor(254, 242, 242);
-    doc.setDrawColor(248, 113, 113);
-    const boxH = Math.min(36, 6 + Math.min(6, irregularEvents.length) * 4.5);
-    doc.roundedRect(14, y, contentWidth, boxH, 1.5, 1.5, "FD");
+    doc.setTextColor(isCandidateGating ? 21 : 180, isCandidateGating ? 128 : 83, isCandidateGating ? 61 : 9);
+    doc.text(`Radiotherapy Gating Evaluation • Stable Breathing Time: ${stablePct}%`, 18, y + 5);
 
-    doc.setFontSize(6.8);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(185, 28, 28);
-    doc.text("#", 18, y + 4.5);
-    doc.text("Time (s)", 26, y + 4.5);
-    doc.text("Detected Event", 52, y + 4.5);
-    doc.text("Mathematical Deviation", 94, y + 4.5);
-    doc.text("Radiotherapy Motion Impact", 140, y + 4.5);
-
-    let flagY = y + 8.5;
+    doc.setFontSize(7);
     doc.setFont("helvetica", "normal");
-    irregularEvents.slice(0, 5).forEach(ev => {
-      doc.text(String(ev.breathNum), 18, flagY);
-      doc.text(ev.window, 26, flagY);
-      doc.text(ev.event.slice(0, 24), 52, flagY);
-      doc.text(ev.reason.slice(0, 28), 94, flagY);
-      doc.text(ev.rtImpact.slice(0, 32), 140, flagY);
-      flagY += 4.2;
+    doc.setTextColor(30, 41, 59);
+    const evalText = isCandidateGating
+      ? `HIGH CONSISTENCY (CV < ${thresholds.cvAmpLimit}%): Patient motion conforms to reproducible eupneic breathing. Qualified for phase-based 4D-CT binning and linear accelerator beam gating.`
+      : `IRREGULAR MOTION DETECTED (CV > ${thresholds.cvAmpLimit}%): Exceeds standard 15% gating tolerance. Prone to 4D-CT phase-sorting artifacts (ghosting/blurring) and linear accelerator beam hold-offs. Recommended: Audio/visual biofeedback guidance or Deep Inspiration Breath Hold (DIBH).`;
+    doc.text(doc.splitTextToSize(String(evalText), contentWidth - 8), 18, y + 9.5);
+
+    // 4. Waveform Snapshot OR Excursion Card
+    y += 18;
+    if (!target && typeof chartInstance !== "undefined" && chartInstance) {
+      doc.setTextColor(15, 23, 42);
+      doc.setFontSize(9.5);
+      doc.setFont("helvetica", "bold");
+      doc.text("3. REAL-TIME RESPIRATORY BELT FORCE WAVEFORM (NEWTONS)", 14, y);
+
+      y += 3.5;
+      try {
+        const imgData = chartInstance.toBase64Image();
+        if (imgData && imgData.indexOf("data:image") === 0) {
+          const imgHeight = 44;
+          doc.addImage(imgData, "PNG", 14, y, contentWidth, imgHeight);
+          y += imgHeight + 5;
+        } else {
+          y += 8;
+        }
+      } catch (e) {
+        y += 8;
+      }
+    }
+
+    // 5. Irregularity Flags & Clinical Deviation Log
+    const irregularEvents = [];
+    cycles.forEach(c => {
+      const flags = [];
+      if (c.cycle_duration_s < 1.5) {
+        flags.push({ event: "Tachypnea / Catch-up", reason: `Cycle duration ${c.cycle_duration_s}s (< 1.5s)`, rtImpact: "Phase compression risk in 4D-CT binning" });
+      } else if (c.cycle_duration_s > 6.0) {
+        flags.push({ event: "Bradypneic Pause / Apnea", reason: `Cycle duration ${c.cycle_duration_s}s (> 6.0s)`, rtImpact: "Linear accelerator beam hold-off; potential baseline drift" });
+      }
+      if (c.net_excursion_n < 0.6) {
+        flags.push({ event: "Shallow Hypopnea", reason: `Excursion ${c.net_excursion_n}N (< 0.6N)`, rtImpact: "May fall below amplitude gating duty threshold" });
+      } else if (c.net_excursion_n > 12.0) {
+        flags.push({ event: "Deep Sigh / Spike", reason: `Excursion ${c.net_excursion_n}N (> 12.0N)`, rtImpact: "Exceeds planning gating envelope (target displacement)" });
+      }
+      if (c.classification && (c.classification.includes("Sigh") || c.classification.includes("Variation") || c.classification.includes("Catch-up") || c.classification.includes("Hold"))) {
+        if (!flags.some(f => f.event.includes(c.classification))) {
+          flags.push({ event: c.classification, reason: "Statistical deviation from session mean", rtImpact: "Intra-fraction target position variation" });
+        }
+      }
+      flags.forEach(f => {
+        irregularEvents.push({
+          breathNum: c.breath_number,
+          window: `${(c.start_time_s || 0).toFixed(1)} - ${(c.end_time_s || 0).toFixed(1)}s`,
+          event: f.event,
+          reason: f.reason,
+          rtImpact: f.rtImpact
+        });
+      });
     });
 
-    if (irregularEvents.length > 5) {
-      doc.setFontSize(6);
-      doc.setTextColor(100, 116, 139);
-      doc.text(`+ ${irregularEvents.length - 5} additional irregularity events detected across session.`, 18, flagY);
-    }
-    y += boxH + 5;
-  }
-
-  // 6. Complete Breath-by-Breath Cycles Breakdown (Multi-page Pagination!)
-  function printCyclesTableHeader(currentY) {
-    doc.setFillColor(241, 245, 249);
-    doc.rect(14, currentY, contentWidth, 6, "F");
-    doc.setDrawColor(203, 213, 225);
-    doc.line(14, currentY + 6, pageWidth - 14, currentY + 6);
-
-    doc.setFontSize(6.8);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(51, 65, 85);
-    doc.text("#", 16, currentY + 4.2);
-    doc.text("Window (s)", 24, currentY + 4.2);
-    doc.text("Duration", 52, currentY + 4.2);
-    doc.text("Rate", 72, currentY + 4.2);
-    doc.text("Peak (N)", 92, currentY + 4.2);
-    doc.text("Amp (ΔF)", 112, currentY + 4.2);
-    doc.text("Insp / Exp", 132, currentY + 4.2);
-    doc.text("I:E", 154, currentY + 4.2);
-    doc.text("Classification", 168, currentY + 4.2);
-  }
-
-  // Check if we need a new page for the table
-  if (y > 220) {
-    doc.addPage();
-    y = 20;
-  }
-
-  doc.setTextColor(15, 23, 42);
-  doc.setFontSize(9.5);
-  doc.setFont("helvetica", "bold");
-  doc.text(`5. COMPLETE BREATH-BY-BREATH CYCLES BREAKDOWN (${cycles.length} TOTAL CYCLES)`, 14, y);
-  y += 4;
-
-  printCyclesTableHeader(y);
-  y += 6;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.8);
-
-  cycles.forEach((c, idx) => {
-    // Multi-page page break check
-    if (y + 5 > pageHeight - 16) {
+    // Check if we need space for Irregularity Section
+    if (y > 230) {
       doc.addPage();
-      y = 18;
-      doc.setTextColor(15, 23, 42);
-      doc.setFontSize(8.5);
-      doc.setFont("helvetica", "bold");
-      doc.text(`5. COMPLETE BREATH-BY-BREATH CYCLES BREAKDOWN (CONTINUED - CYCLE ${c.breath_number} ONWARDS)`, 14, y);
-      y += 4;
-      printCyclesTableHeader(y);
-      y += 6;
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(6.8);
+      y = 20;
     }
 
-    // Alternating zebra striping
-    if (idx % 2 === 1) {
-      doc.setFillColor(248, 250, 252);
-      doc.rect(14, y, contentWidth, 4.4, "F");
-    }
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9.5);
+    doc.setFont("helvetica", "bold");
+    doc.text("4. IRREGULARITY FLAGS & CLINICAL DEVIATION LOG", 14, y);
+    y += 4;
 
-    const isStable = (c.classification && c.classification.includes("Stable"));
-    doc.setTextColor(isStable ? 15 : 185, isStable ? 23 : 28, isStable ? 42 : 28);
-
-    doc.text(String(c.breath_number), 16, y + 3.2);
-    doc.text(`${(c.start_time_s || 0).toFixed(1)} - ${(c.end_time_s || 0).toFixed(1)}s`, 24, y + 3.2);
-    doc.text(`${(c.cycle_duration_s || 0).toFixed(2)}s`, 52, y + 3.2);
-    doc.text(`${(c.respiration_rate_bpm || 0).toFixed(1)}`, 72, y + 3.2);
-    doc.text(`${(c.peak_force_n || 0).toFixed(2)} N`, 92, y + 3.2);
-    doc.text(`${(c.net_excursion_n || 0).toFixed(2)} N`, 112, y + 3.2);
-    doc.text(`${(c.inhale_duration_s || 0).toFixed(1)}s / ${(c.exhale_duration_s || 0).toFixed(1)}s`, 132, y + 3.2);
-    doc.text(c.ie_ratio || "--", 154, y + 3.2);
-    doc.text(c.classification || "Standard", 168, y + 3.2);
-
-    y += 4.4;
-  });
-
-  // 7. Running Headers & Footers across ALL pages
-  const totalPages = doc.internal.getNumberOfPages();
-  for (let p = 1; p <= totalPages; p++) {
-    doc.setPage(p);
-
-    // Header on pages > 1
-    if (p > 1) {
-      doc.setFillColor(15, 23, 42);
-      doc.rect(0, 0, pageWidth, 12, "F");
-      doc.setFillColor(56, 189, 248);
-      doc.rect(0, 12, pageWidth, 0.6, "F");
-      doc.setTextColor(56, 189, 248);
+    if (irregularEvents.length === 0) {
+      doc.setFillColor(240, 253, 244);
+      doc.setDrawColor(74, 222, 128);
+      doc.roundedRect(14, y, contentWidth, 10, 1.5, 1.5, "FD");
       doc.setFontSize(7.5);
       doc.setFont("helvetica", "bold");
-      doc.text(`RESPITRACK // RESEARCH REPORT • Session: ${sessionId} • ${condition}`, 14, 8);
-      doc.setTextColor(148, 163, 184);
+      doc.setTextColor(21, 128, 61);
+      doc.text("✓ NO CLINICAL IRREGULARITIES DETECTED: All recorded cycles conform to normal eupneic limits (CV < 15%).", 18, y + 6.5);
+      y += 14;
+    } else {
+      doc.setFillColor(254, 242, 242);
+      doc.setDrawColor(248, 113, 113);
+      const boxH = Math.min(36, 6 + Math.min(6, irregularEvents.length) * 4.5);
+      doc.roundedRect(14, y, contentWidth, boxH, 1.5, 1.5, "FD");
+
+      doc.setFontSize(6.8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(185, 28, 28);
+      doc.text("#", 18, y + 4.5);
+      doc.text("Time (s)", 26, y + 4.5);
+      doc.text("Detected Event", 52, y + 4.5);
+      doc.text("Mathematical Deviation", 94, y + 4.5);
+      doc.text("Radiotherapy Motion Impact", 140, y + 4.5);
+
+      let flagY = y + 8.5;
       doc.setFont("helvetica", "normal");
-      doc.text(`Vernier GDX-RB (S/N: ${serial})`, pageWidth - 14, 8, { align: "right" });
+      irregularEvents.slice(0, 5).forEach(ev => {
+        doc.text(String(ev.breathNum), 18, flagY);
+        doc.text(ev.window, 26, flagY);
+        doc.text(ev.event.slice(0, 24), 52, flagY);
+        doc.text(ev.reason.slice(0, 28), 94, flagY);
+        doc.text(ev.rtImpact.slice(0, 32), 140, flagY);
+        flagY += 4.2;
+      });
+
+      if (irregularEvents.length > 5) {
+        doc.setFontSize(6);
+        doc.setTextColor(100, 116, 139);
+        doc.text(`+ ${irregularEvents.length - 5} additional irregularity events detected across session.`, 18, flagY);
+      }
+      y += boxH + 5;
     }
 
-    // Footer on all pages
-    doc.setDrawColor(226, 232, 240);
-    doc.setLineWidth(0.4);
-    doc.line(14, 287, pageWidth - 14, 287);
+    // 6. Complete Breath-by-Breath Cycles Breakdown (Multi-page Pagination!)
+    function printCyclesTableHeader(currentY) {
+      doc.setFillColor(241, 245, 249);
+      doc.rect(14, currentY, contentWidth, 6, "F");
+      doc.setDrawColor(203, 213, 225);
+      doc.line(14, currentY + 6, pageWidth - 14, currentY + 6);
 
-    doc.setFontSize(6.5);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(148, 163, 184);
-    doc.text("RESEARCH NOTICE: For experimental research in respiratory motion for radiation treatment planning. Not for direct clinical diagnosis.", 14, 292);
+      doc.setFontSize(6.8);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(51, 65, 85);
+      doc.text("#", 16, currentY + 4.2);
+      doc.text("Window (s)", 24, currentY + 4.2);
+      doc.text("Duration", 52, currentY + 4.2);
+      doc.text("Rate", 72, currentY + 4.2);
+      doc.text("Peak (N)", 92, currentY + 4.2);
+      doc.text("Amp (ΔF)", 112, currentY + 4.2);
+      doc.text("Insp / Exp", 132, currentY + 4.2);
+      doc.text("I:E", 154, currentY + 4.2);
+      doc.text("Classification", 168, currentY + 4.2);
+    }
 
+    // Check if we need a new page for the table
+    if (y > 220) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(9.5);
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(100, 116, 139);
-    doc.text(`Page ${p} of ${totalPages}`, pageWidth - 14, 292, { align: "right" });
-  }
+    doc.text(`5. COMPLETE BREATH-BY-BREATH CYCLES BREAKDOWN (${cycles.length} TOTAL CYCLES)`, 14, y);
+    y += 4;
 
-  const filename = `respiratory_report_${condition.toLowerCase()}_${sessionId}_${now.toISOString().slice(0, 10)}.pdf`;
-  doc.save(filename);
+    printCyclesTableHeader(y);
+    y += 6;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.8);
+
+    cycles.forEach((c, idx) => {
+      // Multi-page page break check
+      if (y + 5 > pageHeight - 16) {
+        doc.addPage();
+        y = 18;
+        doc.setTextColor(15, 23, 42);
+        doc.setFontSize(8.5);
+        doc.setFont("helvetica", "bold");
+        doc.text(`5. COMPLETE BREATH-BY-BREATH CYCLES BREAKDOWN (CONTINUED - CYCLE ${c.breath_number} ONWARDS)`, 14, y);
+        y += 4;
+        printCyclesTableHeader(y);
+        y += 6;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.8);
+      }
+
+      // Alternating zebra striping
+      if (idx % 2 === 1) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(14, y, contentWidth, 4.4, "F");
+      }
+
+      const isStable = (c.classification && c.classification.includes("Stable"));
+      doc.setTextColor(isStable ? 15 : 185, isStable ? 23 : 28, isStable ? 42 : 28);
+
+      doc.text(String(c.breath_number), 16, y + 3.2);
+      doc.text(`${(c.start_time_s || 0).toFixed(1)} - ${(c.end_time_s || 0).toFixed(1)}s`, 24, y + 3.2);
+      doc.text(`${(c.cycle_duration_s || 0).toFixed(2)}s`, 52, y + 3.2);
+      doc.text(`${(c.respiration_rate_bpm || 0).toFixed(1)}`, 72, y + 3.2);
+      doc.text(`${(c.peak_force_n || 0).toFixed(2)} N`, 92, y + 3.2);
+      doc.text(`${(c.net_excursion_n || 0).toFixed(2)} N`, 112, y + 3.2);
+      doc.text(`${(c.inhale_duration_s || 0).toFixed(1)}s / ${(c.exhale_duration_s || 0).toFixed(1)}s`, 132, y + 3.2);
+      doc.text(c.ie_ratio || "--", 154, y + 3.2);
+      doc.text(c.classification || "Standard", 168, y + 3.2);
+
+      y += 4.4;
+    });
+
+    // 7. Running Headers & Footers across ALL pages
+    const totalPages = doc.internal.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+
+      // Header on pages > 1
+      if (p > 1) {
+        doc.setFillColor(15, 23, 42);
+        doc.rect(0, 0, pageWidth, 12, "F");
+        doc.setFillColor(56, 189, 248);
+        doc.rect(0, 12, pageWidth, 0.6, "F");
+        doc.setTextColor(56, 189, 248);
+        doc.setFontSize(7.5);
+        doc.setFont("helvetica", "bold");
+        doc.text(`RESPITRACK // RESEARCH REPORT • Session: ${sessionId} • ${condition}`, 14, 8);
+        doc.setTextColor(148, 163, 184);
+        doc.setFont("helvetica", "normal");
+        doc.text(`Vernier GDX-RB (S/N: ${serial})`, pageWidth - 14, 8, { align: "right" });
+      }
+
+      // Footer on all pages
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.4);
+      doc.line(14, 287, pageWidth - 14, 287);
+
+      doc.setFontSize(6.5);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(148, 163, 184);
+      doc.text("RESEARCH NOTICE: For experimental research in respiratory motion for radiation treatment planning. Not for direct clinical diagnosis.", 14, 292);
+
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(100, 116, 139);
+      doc.text(`Page ${p} of ${totalPages}`, pageWidth - 14, 292, { align: "right" });
+    }
+
+    const filename = `respiratory_report_${condition.toLowerCase()}_${sessionId}_${now.toISOString().slice(0, 10)}.pdf`;
+    doc.save(filename);
+  } catch (err) {
+    console.error("PDF generation failed:", err);
+    alert("Could not generate PDF report: " + (err.message || err));
+  }
+}
+
+// Explicit window bindings for reliability in all browsers
+if (typeof window !== "undefined") {
+  window.exportSavedSessionPDF = exportSavedSessionPDF;
+  window.exportSavedSessionCSV = exportSavedSessionCSV;
+  window.loadSavedSession = loadSavedSession;
+  window.deleteSavedSession = deleteSavedSession;
+  window.importSessionsJSON = importSessionsJSON;
+  window.clearAllSessions = clearAllSessions;
+  window.exportSessionPDF = exportSessionPDF;
 }
 
 // ========================================================
@@ -1564,11 +1618,19 @@ function updateRecordedCounters() {
     elDur.innerText = `${m}:${s}`;
   }
 
-  const hasData = (count > 0);
-  ["btn-download-summary", "btn-download-csv", "btn-download-json", "btn-download-pdf", "btn-table-download-csv"].forEach(id => {
+  const hasData = (count > 0 || (breathCycles && breathCycles.length > 0) || currentActiveLoadedSession !== null);
+  ["btn-download-summary", "btn-download-csv", "btn-download-json", "btn-table-download-csv"].forEach(id => {
     const b = document.getElementById(id);
     if (b) b.disabled = !hasData;
   });
+  const btnPdf = document.getElementById("btn-download-pdf");
+  if (btnPdf) {
+    btnPdf.disabled = false;
+    btnPdf.style.opacity = hasData ? "1" : "0.85";
+    btnPdf.title = hasData 
+      ? "Generate comprehensive scientific PDF report with graphs and statistics" 
+      : "Click to generate report (requires active recording or loaded session)";
+  }
 }
 
 function clearSessionRecording() {
@@ -1578,6 +1640,8 @@ function clearSessionRecording() {
   recordedSessionData = [];
   breathCycles = [];
   currentBreathCount = 0;
+  currentActiveLoadedSession = null;
+  currentSessionId = null;
   document.getElementById("rec-breaths").innerText = "0";
   updateRecordedCounters();
   renderBreathTable([]);
