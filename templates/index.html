@@ -1,19 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RespiTrack // Vernier Go Direct Respiration Belt Breathing Pattern Recorder</title>
-  <meta name="description" content="Real-time Vernier Go Direct Respiration Belt (GDX-RB) USB hardware telemetry, continuous breathing pattern acquisition, real-time waveform oscilloscope, and session data download in CSV/JSON.">
-  
+  <meta name="description"
+    content="Real-time Vernier Go Direct Respiration Belt (GDX-RB) USB hardware telemetry, continuous breathing pattern acquisition, real-time waveform oscilloscope, and session data download in CSV/JSON.">
+
   <!-- Modern Typography -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-  
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
+
   <!-- Socket.io and Chart.js CDNs -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <!-- Vernier Go Direct Browser SDK (WebHID & Web Bluetooth) -->
+  <script src="/static/godirect.min.umd.js"></script>
+  <script>
+    if (typeof godirect === 'undefined') {
+      const s = document.createElement('script');
+      s.src = 'https://unpkg.com/@vernier/godirect@1.8.3/dist/godirect.min.umd.js';
+      document.head.appendChild(s);
+    }
+  </script>
 
   <style>
     :root {
@@ -22,19 +35,19 @@
       --bg-surface-elevated: rgba(30, 41, 59, 0.85);
       --border-subtle: rgba(255, 255, 255, 0.08);
       --border-accent: rgba(56, 189, 248, 0.25);
-      
+
       --text-primary: #f8fafc;
       --text-secondary: #94a3b8;
       --text-muted: #64748b;
-      
+
       --status-active: #10b981;
       --status-active-glow: rgba(16, 185, 129, 0.35);
       --status-active-bg: rgba(16, 185, 129, 0.12);
-      
+
       --status-alert: #ef4444;
       --status-alert-glow: rgba(239, 68, 68, 0.4);
       --status-alert-bg: rgba(239, 68, 68, 0.15);
-      
+
       --status-warn: #f59e0b;
       --status-warn-glow: rgba(245, 158, 11, 0.35);
       --status-warn-bg: rgba(245, 158, 11, 0.12);
@@ -46,7 +59,7 @@
       --accent-cyan-glow: rgba(6, 182, 212, 0.35);
       --accent-amber: #f59e0b;
       --accent-emerald: #10b981;
-      
+
       --font-ui: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       --font-mono: 'JetBrains Mono', monospace;
     }
@@ -59,7 +72,7 @@
 
     body {
       background-color: var(--bg-base);
-      background-image: 
+      background-image:
         radial-gradient(at 15% 15%, rgba(14, 165, 233, 0.08) 0px, transparent 40%),
         radial-gradient(at 85% 85%, rgba(16, 185, 129, 0.06) 0px, transparent 45%),
         linear-gradient(180deg, #070b14 0%, #0a0f1d 100%);
@@ -185,15 +198,31 @@
     }
 
     @keyframes pulse-green {
-      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
-      70% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+      0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6);
+      }
+
+      70% {
+        box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+      }
     }
 
     @keyframes pulse-cyan {
-      0% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.6); }
-      70% { box-shadow: 0 0 0 8px rgba(6, 182, 212, 0); }
-      100% { box-shadow: 0 0 0 0 rgba(6, 182, 212, 0); }
+      0% {
+        box-shadow: 0 0 0 0 rgba(6, 182, 212, 0.6);
+      }
+
+      70% {
+        box-shadow: 0 0 0 8px rgba(6, 182, 212, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(6, 182, 212, 0);
+      }
     }
 
     /* =================================================== */
@@ -639,9 +668,20 @@
     }
 
     @keyframes pulse-recording {
-      0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-      70% { transform: scale(1.15); box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
-      100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+      0% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+      }
+
+      70% {
+        transform: scale(1.15);
+        box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+      }
+
+      100% {
+        transform: scale(0.9);
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+      }
     }
 
     .rec-stats-row {
@@ -718,6 +758,61 @@
 
     .btn-clear-data:hover:not(:disabled) {
       background: rgba(239, 68, 68, 0.25);
+      color: #ffffff;
+    }
+
+    .btn-connect-usb {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: #ffffff;
+      border: 1px solid rgba(16, 185, 129, 0.5);
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 10px 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-connect-usb:hover:not(:disabled) {
+      background: linear-gradient(135deg, #10b981, #34d399);
+      box-shadow: 0 6px 18px rgba(16, 185, 129, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-connect-ble {
+      background: linear-gradient(135deg, #2563eb, #3b82f6);
+      color: #ffffff;
+      border: 1px solid rgba(59, 130, 246, 0.5);
+      box-shadow: 0 4px 14px rgba(59, 130, 246, 0.35);
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      padding: 10px 14px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-connect-ble:hover:not(:disabled) {
+      background: linear-gradient(135deg, #3b82f6, #60a5fa);
+      box-shadow: 0 6px 18px rgba(59, 130, 246, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-disconnect-hw {
+      background: rgba(255, 255, 255, 0.07);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #cbd5e1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-disconnect-hw:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.14);
       color: #ffffff;
     }
 
@@ -972,6 +1067,7 @@
     }
   </style>
 </head>
+
 <body>
   <div class="app-container">
 
@@ -1011,7 +1107,8 @@
     </header>
 
     <!-- 2. BREATHING PATTERN CLASSIFICATION & ASSESSMENT BANNER -->
-    <section id="diagnostic-summary-card" class="diagnostic-summary-card diag-standby" aria-label="Breathing Pattern Assessment">
+    <section id="diagnostic-summary-card" class="diagnostic-summary-card diag-standby"
+      aria-label="Breathing Pattern Assessment">
       <div class="diag-main-row">
         <div class="diag-left-content">
           <div class="diag-icon-wrapper" id="diag-icon-wrapper">
@@ -1026,7 +1123,8 @@
             </div>
             <div id="diag-headline" class="diag-headline">Vernier Belt Ready — Awaiting Recording</div>
             <div id="diag-description" class="diag-description">
-              The Vernier Go Direct Respiration Belt is connected over USB. Click <strong>Start Recording</strong> to capture live breathing kinematics and chest excursion data.
+              The Vernier Go Direct Respiration Belt is connected over USB. Click <strong>Start Recording</strong> to
+              capture live breathing kinematics and chest excursion data.
             </div>
           </div>
         </div>
@@ -1074,14 +1172,16 @@
 
           <!-- Hero Start / Stop Action Buttons -->
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <button id="btn-start-sensor" class="btn btn-record-start" onclick="startSensor()" title="Start capturing and recording breathing data">
+            <button id="btn-start-sensor" class="btn btn-record-start" onclick="startSensor()"
+              title="Start capturing and recording breathing data">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polygon points="5 3 19 12 5 21 5 3" fill="currentColor"></polygon>
               </svg>
               <span>Start Recording</span>
             </button>
 
-            <button id="btn-stop-sensor" class="btn btn-record-stop" onclick="stopSensor()" disabled title="Pause / Stop recording session">
+            <button id="btn-stop-sensor" class="btn btn-record-stop" onclick="stopSensor()" disabled
+              title="Pause / Stop recording session">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <rect x="6" y="6" width="12" height="12" fill="currentColor"></rect>
               </svg>
@@ -1118,7 +1218,8 @@
 
             <!-- Download Actions -->
             <div class="download-btn-row" style="grid-template-columns: 1.4fr 1.1fr 0.8fr 0.8fr;">
-              <button id="btn-download-summary" class="btn btn-download-primary" onclick="downloadPhysicalSummaryCSV()" disabled title="Download clean human-readable breath-by-breath table in CSV">
+              <button id="btn-download-summary" class="btn btn-download-primary" onclick="downloadPhysicalSummaryCSV()"
+                disabled title="Download clean human-readable breath-by-breath table in CSV">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                   <polyline points="14 2 14 8 20 8"></polyline>
@@ -1129,7 +1230,8 @@
                 <span>Summary CSV</span>
               </button>
 
-              <button id="btn-download-csv" class="btn btn-download-secondary" onclick="downloadSessionCSV()" disabled title="Download raw 10 Hz time-series CSV">
+              <button id="btn-download-csv" class="btn btn-download-secondary" onclick="downloadSessionCSV()" disabled
+                title="Download raw 10 Hz time-series CSV">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
@@ -1138,11 +1240,13 @@
                 <span>Raw 10Hz</span>
               </button>
 
-              <button id="btn-download-json" class="btn btn-download-secondary" onclick="downloadSessionJSON()" disabled title="Download structured JSON file">
+              <button id="btn-download-json" class="btn btn-download-secondary" onclick="downloadSessionJSON()" disabled
+                title="Download structured JSON file">
                 JSON
               </button>
 
-              <button id="btn-clear-rec" class="btn btn-clear-data" onclick="clearSessionRecording()" title="Reset session samples and breath counter">
+              <button id="btn-clear-rec" class="btn btn-clear-data" onclick="clearSessionRecording()"
+                title="Reset session samples and breath counter">
                 Clear
               </button>
             </div>
@@ -1176,12 +1280,15 @@
           </div>
 
           <!-- Device Information Line -->
-          <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; background: rgba(0, 0, 0, 0.25); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-subtle);">
+          <div
+            style="display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; background: rgba(0, 0, 0, 0.25); padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border-subtle);">
             <div>
               <span id="hw-device-name" style="font-weight: 600; color: #f1f5f9;">Go Direct&reg; Respiration Belt</span>
-              <span style="color: var(--text-muted); margin-left: 6px;">(S/N: <strong id="hw-serial">0K7014Z0</strong>)</span>
+              <span style="color: var(--text-muted); margin-left: 6px;">(S/N: <strong
+                  id="hw-serial">0K7014Z0</strong>)</span>
             </div>
-            <span style="color: var(--status-active); font-family: var(--font-mono); font-size: 0.75rem;">USB HID 10 Hz</span>
+            <span style="color: var(--status-active); font-family: var(--font-mono); font-size: 0.75rem;">USB HID 10
+              Hz</span>
           </div>
 
           <!-- Force Balance Readout -->
@@ -1200,9 +1307,40 @@
             </div>
           </div>
 
-          <!-- Calibration Buttons -->
-          <div class="hardware-actions">
-            <button id="btn-tare-sensor" class="btn btn-tare" onclick="tareSensor()" title="Zeroes resting strap tension at end-expiration">
+          <!-- Direct Browser Hardware Link (Vercel & WebHID Ready) -->
+          <div style="background: rgba(6, 182, 212, 0.08); border: 1px solid rgba(6, 182, 212, 0.25); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: 0.76rem; font-weight: 700; color: var(--accent-cyan); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 6px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                Direct Browser Link (Vercel &amp; Cloud Ready)
+              </span>
+              <span id="conn-mode-badge" style="font-size: 0.68rem; font-family: var(--font-mono); padding: 2px 8px; border-radius: 4px; background: rgba(0,0,0,0.5); color: var(--text-muted); border: 1px solid var(--border-subtle);">
+                STANDBY
+              </span>
+            </div>
+            <p style="font-size: 0.75rem; color: var(--text-secondary); line-height: 1.35;">
+              Connect your Vernier belt directly in Chrome or Edge over USB or Bluetooth. No local Python server needed on Vercel!
+            </p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <button id="btn-connect-usb" class="btn-connect-usb" onclick="connectBrowserBelt(false)" title="Connect Vernier Go Direct belt over USB via WebHID in Chrome">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <path d="M12 2v10m0 0l-3-3m3 3l3-3M5 12h14v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7z"/>
+                </svg>
+                <span>Connect USB</span>
+              </button>
+              <button id="btn-connect-ble" class="btn-connect-ble" onclick="connectBrowserBelt(true)" title="Connect Vernier Go Direct belt wirelessly over Bluetooth in Chrome">
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polyline points="6.5 6.5 17.5 17.5 12 23 12 1 17.5 6.5 6.5 17.5"/>
+                </svg>
+                <span>Connect BLE</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Calibration & Hardware Management -->
+          <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 8px;">
+            <button id="btn-tare-sensor" class="btn btn-tare" onclick="tareSensor()"
+              title="Zeroes resting strap tension at end-expiration">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="10"></circle>
                 <line x1="12" y1="8" x2="12" y2="16"></line>
@@ -1211,12 +1349,13 @@
               <span>Tare / Zero Baseline</span>
             </button>
 
-            <button id="btn-reconnect-hw" class="btn btn-rescan" onclick="reconnectHardware()" title="Rescans USB bus for Vernier belt">
+            <button id="btn-reconnect-hw" class="btn btn-disconnect-hw" onclick="disconnectOrRescanHardware()"
+              title="Disconnects active browser belt or rescans local USB">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="23 4 23 10 17 10"></polyline>
                 <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
               </svg>
-              <span>Rescan USB</span>
+              <span id="btn-rescan-text">Rescan / Demo</span>
             </button>
           </div>
         </section>
@@ -1260,7 +1399,7 @@
               <div class="hud-label">
                 <span>Breathing Phase</span>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                 </svg>
               </div>
               <div style="margin-top: 4px;">
@@ -1292,7 +1431,8 @@
                 <span id="hud-range-val">0.0</span>
                 <span class="hud-unit">N</span>
               </div>
-              <div class="hud-sub-val">Min: <span id="hud-min-val">0.0</span> N | Max: <span id="hud-max-val">0.0</span> N</div>
+              <div class="hud-sub-val">Min: <span id="hud-min-val">0.0</span> N | Max: <span id="hud-max-val">0.0</span>
+                N</div>
             </div>
           </div>
         </section>
@@ -1307,7 +1447,9 @@
               <span>Breathing Pattern Oscilloscope (10 Hz)</span>
             </div>
             <div style="display: flex; align-items: center; gap: 8px;">
-              <button id="btn-header-csv" class="btn btn-download-primary" style="padding: 5px 12px; font-size: 0.75rem;" onclick="downloadSessionCSV()" disabled title="Download recorded session in CSV">
+              <button id="btn-header-csv" class="btn btn-download-primary"
+                style="padding: 5px 12px; font-size: 0.75rem;" onclick="downloadSessionCSV()" disabled
+                title="Download recorded session in CSV">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                   <polyline points="7 10 12 15 17 10"></polyline>
@@ -1362,10 +1504,13 @@
         </div>
         <div style="display: flex; align-items: center; gap: 10px;">
           <span id="summary-badge-count" class="badge-subtle">0 Breaths Analyzed</span>
-          <button id="btn-table-download-csv" class="btn btn-download-primary" style="padding: 5px 12px; font-size: 0.75rem;" onclick="downloadPhysicalSummaryCSV()" disabled title="Download breath-by-breath table as CSV">
+          <button id="btn-table-download-csv" class="btn btn-download-primary"
+            style="padding: 5px 12px; font-size: 0.75rem;" onclick="downloadPhysicalSummaryCSV()" disabled
+            title="Download breath-by-breath table as CSV">
             Download Physical Summary (CSV)
           </button>
-          <button class="btn btn-rescan" style="padding: 5px 12px; font-size: 0.75rem;" onclick="loadBreathSummary()" title="Recompute breath cycle breakdown">
+          <button class="btn btn-rescan" style="padding: 5px 12px; font-size: 0.75rem;" onclick="loadBreathSummary()"
+            title="Recompute breath cycle breakdown">
             Refresh Table
           </button>
         </div>
@@ -1402,8 +1547,10 @@
 
     <!-- Footer -->
     <footer class="app-footer">
-      <div><strong>RespiTrack Breathing Pattern Acquisition</strong> &bull; Vernier Go Direct&reg; Respiration Belt USB Integration</div>
-      <div>10 Hz Transducer Stream &bull; Session Data Export (CSV &amp; JSON) &bull; Device S/N: <span id="footer-serial">0K7014Z0</span></div>
+      <div><strong>RespiTrack Breathing Pattern Acquisition</strong> &bull; Vernier Go Direct&reg; Respiration Belt USB
+        Integration</div>
+      <div>10 Hz Transducer Stream &bull; Session Data Export (CSV &amp; JSON) &bull; Device S/N: <span
+          id="footer-serial">0K7014Z0</span></div>
     </footer>
 
   </div>
@@ -1413,7 +1560,7 @@
     let socket = null;
     let isSensorStreaming = false;
     let isHardwareConnected = false;
-    
+
     let totalPacketsReceived = 0;
     let lastSensorValue = 0;
     let sessionStartTime = null;
@@ -1480,13 +1627,13 @@
             }
           },
           scales: {
-            x: { 
-              display: true, 
-              grid: { color: "rgba(255, 255, 255, 0.04)" }, 
-              ticks: { display: false } 
+            x: {
+              display: true,
+              grid: { color: "rgba(255, 255, 255, 0.04)" },
+              ticks: { display: false }
             },
             y: {
-              min: 0, 
+              min: 0,
               max: 5.0,
               grid: { color: "rgba(255, 255, 255, 0.07)" },
               ticks: {
@@ -1519,7 +1666,7 @@
         card.className = "diagnostic-summary-card diag-standby";
         badge.innerText = "STANDBY";
         headline.innerText = isHardwareConnected ? "Vernier Belt Ready — Awaiting Recording" : "Searching for Vernier USB Belt...";
-        desc.innerText = isHardwareConnected 
+        desc.innerText = isHardwareConnected
           ? "The Vernier Go Direct Respiration Belt is connected over USB. Click Start Recording to begin capturing breathing data."
           : "Plug the Vernier Go Direct Respiration Belt into a USB port on this computer, then click Rescan USB.";
         chipRate.innerText = "-- BPM";
@@ -1547,7 +1694,7 @@
         rateClassText = "Bradypnea (< 10 BPM)";
         abnormalities.push({
           title: "Bradypnea / Slow Breathing (< 10 BPM)",
-          desc: `Slow breathing frequency (${bpm.toFixed(1)} BPM) with extended cycle period (${(60/bpm).toFixed(1)} s per breath).`,
+          desc: `Slow breathing frequency (${bpm.toFixed(1)} BPM) with extended cycle period (${(60 / bpm).toFixed(1)} s per breath).`,
           level: "warn"
         });
       }
@@ -1623,61 +1770,68 @@
     }
 
     // --- Socket.IO Client Connection & Cloud Fallback ---
-    let isServerlessMode = false;
-    let cachedSessionSamples = [];
-    let cloudPlaybackIndex = 0;
+    let activeConnectionMode = "idle"; // 'browser-hid', 'browser-ble', 'socket', 'replay'
+    let cachedDemoSamples = [];
     let cloudPlaybackInterval = null;
+    let cloudPlaybackIndex = 0;
 
-    async function enableCloudModeFallback() {
-      if (isServerlessMode) return;
-      isServerlessMode = true;
-      console.log("Vercel Serverless environment detected. Activating Cloud Replay & Telemetry Engine.");
-
+    async function checkVercelOrCloudMode() {
       const socketStatusBadge = document.getElementById("socket-status-badge");
       const socketStatusText = document.getElementById("socket-status-text");
-      if (socketStatusBadge) {
-        socketStatusBadge.className = "status-pill active";
-        socketStatusText.innerText = "VERCEL CLOUD MODE";
+      if (socketStatusBadge && (!socket || !socket.connected)) {
+        socketStatusBadge.className = "status-pill";
+        socketStatusText.innerText = "CLOUD / BROWSER MODE";
       }
 
-      // Check REST API status
+      const connBadge = document.getElementById("conn-mode-badge");
+      if (connBadge && activeConnectionMode === "idle") {
+        connBadge.innerText = "VERCEL READY";
+        connBadge.style.color = "var(--accent-cyan)";
+      }
+
+      // Check REST API for hardware status if running on Vercel
       try {
         const res = await fetch("/api/status");
         if (res.ok) {
           const status = await res.json();
-          const hwBadge = document.getElementById("hw-status-badge");
-          const hwText = document.getElementById("hw-status-text");
-          if (hwBadge) {
-            hwBadge.className = "status-pill connected";
-            hwText.innerText = "VERNIER 0K7014Z0 DATA";
-          }
-          if (status.serial_number) {
+          if (status.serial_number && status.serial_number !== "Unknown") {
             document.getElementById("hw-serial").innerText = status.serial_number;
             document.getElementById("footer-serial").innerText = status.serial_number;
           }
           if (status.tare_offset !== undefined) {
             document.getElementById("force-tare-val").innerText = status.tare_offset.toFixed(3) + " N";
           }
-          currentBpm = status.bpm || 12.4;
-          currentAmplitude = status.amplitude || 4.5;
-          currentNoise = status.noise_level || 0.05;
-          evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
         }
       } catch (e) {}
 
-      // Fetch recorded samples for client-side replay
-      try {
-        const res2 = await fetch("/api/session-samples");
-        if (res2.ok) {
-          const data = await res2.json();
-          cachedSessionSamples = data.samples || [];
-          if (cachedSessionSamples.length > 0) {
-            recordedSessionData = cachedSessionSamples;
-            updateRecordedCounters();
-            loadBreathSummary();
+      // Pre-load session data for instant breath summary and demo replay
+      if (cachedDemoSamples.length === 0) {
+        try {
+          const res = await fetch("/static/session_data.json");
+          if (res.ok) {
+            const data = await res.json();
+            cachedDemoSamples = data.samples || [];
+            if (cachedDemoSamples.length > 0 && recordedSessionData.length === 0) {
+              recordedSessionData = cachedDemoSamples;
+              updateRecordedCounters();
+              loadBreathSummary();
+            }
           }
+        } catch (e) {
+          try {
+            const res2 = await fetch("/api/session-samples");
+            if (res2.ok) {
+              const data2 = await res2.json();
+              cachedDemoSamples = data2.samples || [];
+              if (cachedDemoSamples.length > 0 && recordedSessionData.length === 0) {
+                recordedSessionData = cachedDemoSamples;
+                updateRecordedCounters();
+                loadBreathSummary();
+              }
+            }
+          } catch (e2) {}
         }
-      } catch (e) {}
+      }
     }
 
     function initSocketConnection() {
@@ -1686,76 +1840,86 @@
 
       try {
         socket = io({
-          timeout: 3000,
+          timeout: 2500,
           reconnectionAttempts: 2
         });
 
         socket.on("connect", () => {
           socketStatusBadge.className = "status-pill connected";
           socketStatusText.innerText = "WEBSOCKET ONLINE";
-          isServerlessMode = false;
-        });
-
-        socket.on("connect_error", () => {
-          enableCloudModeFallback();
+          activeConnectionMode = "socket";
+          const connBadge = document.getElementById("conn-mode-badge");
+          if (connBadge) {
+            connBadge.innerText = "LOCAL PYTHON";
+            connBadge.style.color = "var(--status-active)";
+          }
         });
 
         socket.on("disconnect", () => {
-          if (!isServerlessMode) {
+          if (activeConnectionMode === "socket") {
             socketStatusBadge.className = "status-pill disconnected";
             socketStatusText.innerText = "WEBSOCKET OFFLINE";
             updateSensorActiveUI(false);
           }
         });
+
+        socket.on("connect_error", () => {
+          socketStatusBadge.className = "status-pill";
+          socketStatusText.innerText = "CLOUD / BROWSER MODE";
+          checkVercelOrCloudMode();
+        });
+
+        socket.on("sensor_status", (status) => {
+          // If browser device is active, let browser device take precedence
+          if (browserGdxDevice && browserGdxDevice.opened) return;
+
+          isHardwareConnected = status.connected;
+          const hwBadge = document.getElementById("hw-status-badge");
+          const hwText = document.getElementById("hw-status-text");
+
+          if (status.connected) {
+            hwBadge.className = "status-pill connected";
+            hwText.innerText = `VERNIER ${status.order_code || 'GDX-RB'} ONLINE`;
+            document.getElementById("hw-device-name").innerText = status.device_name || "Vernier Go Direct Respiration Belt";
+            document.getElementById("hw-order-code").innerText = status.order_code || "GDX-RB";
+            const sn = status.serial_number || "0K7014Z0";
+            document.getElementById("hw-serial").innerText = sn;
+            document.getElementById("footer-serial").innerText = sn;
+          } else {
+            hwBadge.className = "status-pill disconnected";
+            hwText.innerText = "SENSOR DISCONNECTED";
+          }
+
+          updateSensorActiveUI(status.active);
+          currentBpm = status.bpm || 14.0;
+          currentAmplitude = status.amplitude || 2.5;
+          currentNoise = status.noise_level || 0.05;
+          if (status.breath_count !== undefined) {
+            currentBreathCount = status.breath_count;
+            document.getElementById("rec-breaths").innerText = currentBreathCount;
+          }
+
+          if (status.tare_offset !== undefined) {
+            document.getElementById("force-tare-val").innerText = status.tare_offset.toFixed(3) + " N";
+          }
+
+          evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
+        });
+
+        socket.on("respiratory_data", (data) => {
+          if (browserGdxDevice && browserGdxDevice.opened) return;
+          processIncomingSample(data);
+        });
       } catch (e) {
-        enableCloudModeFallback();
+        checkVercelOrCloudMode();
       }
 
-      // Safety timeout for serverless environments where WebSocket never responds
+      // Safety fallback check for serverless environments where WebSocket never connects
       setTimeout(() => {
         if (!socket || !socket.connected) {
-          enableCloudModeFallback();
+          checkVercelOrCloudMode();
         }
-      }, 2500);
-
-      socket.on("sensor_status", (status) => {
-        isHardwareConnected = status.connected;
-        const hwBadge = document.getElementById("hw-status-badge");
-        const hwText = document.getElementById("hw-status-text");
-
-        if (status.connected) {
-          hwBadge.className = "status-pill connected";
-          hwText.innerText = `VERNIER ${status.order_code || 'GDX-RB'} ONLINE`;
-          document.getElementById("hw-device-name").innerText = status.device_name || "Vernier Go Direct Respiration Belt";
-          document.getElementById("hw-order-code").innerText = status.order_code || "GDX-RB";
-          const sn = status.serial_number || "Unknown";
-          document.getElementById("hw-serial").innerText = sn;
-          document.getElementById("footer-serial").innerText = sn;
-        } else {
-          hwBadge.className = "status-pill disconnected";
-          hwText.innerText = "SENSOR DISCONNECTED";
-        }
-
-        updateSensorActiveUI(status.active);
-        currentBpm = status.bpm || 14.0;
-        currentAmplitude = status.amplitude || 2.5;
-        currentNoise = status.noise_level || 0.05;
-        if (status.breath_count !== undefined) {
-          currentBreathCount = status.breath_count;
-          document.getElementById("rec-breaths").innerText = currentBreathCount;
-        }
-
-        if (status.tare_offset !== undefined) {
-          document.getElementById("force-tare-val").innerText = status.tare_offset.toFixed(3) + " N";
-        }
-
-        evaluateBreathingDiagnostics(currentBpm, currentAmplitude, currentNoise);
-      });
-
-      // 10 Hz Real-Time Physical Sensor Data Receiver
-      socket.on("respiratory_data", (data) => {
-        processIncomingSample(data);
-      });
+      }, 2000);
     }
 
     function processIncomingSample(data) {
@@ -1949,8 +2113,8 @@
       }
 
       const now = new Date();
-      const dateTag = now.toISOString().slice(0,10).replace(/-/g, "") + "_" + 
-                      now.toTimeString().slice(0,8).replace(/:/g, "");
+      const dateTag = now.toISOString().slice(0, 10).replace(/-/g, "") + "_" +
+        now.toTimeString().slice(0, 8).replace(/:/g, "");
       const serial = document.getElementById("hw-serial").innerText || "0K7014Z0";
       const filename = `breathing_pattern_${serial}_${dateTag}.csv`;
 
@@ -1989,8 +2153,8 @@
       }
 
       const now = new Date();
-      const dateTag = now.toISOString().slice(0,10).replace(/-/g, "") + "_" + 
-                      now.toTimeString().slice(0,8).replace(/:/g, "");
+      const dateTag = now.toISOString().slice(0, 10).replace(/-/g, "") + "_" +
+        now.toTimeString().slice(0, 8).replace(/:/g, "");
       const serial = document.getElementById("hw-serial").innerText || "0K7014Z0";
       const filename = `breathing_pattern_${serial}_${dateTag}.json`;
 
@@ -2031,39 +2195,253 @@
       }
     }
 
-    // Hardware & Cloud Actions
-    function startSensor() {
-      if (socket && socket.connected) {
-        socket.emit("start_sensor");
-      } else {
-        startCloudPlayback();
+    // ==========================================
+    // --- Direct Browser Hardware & Cloud Engine ---
+    // ==========================================
+    let browserGdxDevice = null;
+    let browserTareOffset = 0.0;
+    let browserSampleCount = 0;
+    let browserStartTime = null;
+    let lastRawForce = 0.0;
+    let lastBpm = 14.0;
+    let browserBreathCount = 0;
+    let browserPhase = "Exhale";
+    let forceFilterWindow = [];
+    let lastFilteredForce = 0.0;
+    let peakState = "seeking_peak";
+    let lastPeakTime = 0;
+
+    async function connectBrowserBelt(useBluetooth = false) {
+      if (typeof godirect === 'undefined') {
+        alert("Vernier GoDirect browser library is still loading. Please check your internet connection and try again.");
+        return;
+      }
+
+      if (!useBluetooth && !navigator.hid) {
+        alert("WebHID is not supported in this browser.\n\nPlease open this page in Google Chrome, Microsoft Edge, or Opera to connect your USB belt directly.");
+        return;
+      }
+
+      if (useBluetooth && !navigator.bluetooth) {
+        alert("Web Bluetooth is not supported in this browser.\n\nPlease open this page in Google Chrome, Microsoft Edge, or Opera to connect your belt wirelessly.");
+        return;
+      }
+
+      try {
+        // Disconnect existing browser session if any
+        if (browserGdxDevice) {
+          try { await browserGdxDevice.close(); } catch(e) {}
+          browserGdxDevice = null;
+        }
+        if (cloudPlaybackInterval) {
+          stopDemoPlayback();
+        }
+
+        const modeStr = useBluetooth ? "Bluetooth BLE" : "USB HID";
+        console.log(`[WebHID/BLE] Requesting Vernier Go Direct device via ${modeStr}...`);
+
+        // Prompts native browser device chooser
+        const device = await godirect.selectDevice(useBluetooth);
+        if (!device) return;
+
+        browserGdxDevice = device;
+        activeConnectionMode = useBluetooth ? "browser-ble" : "browser-hid";
+        isHardwareConnected = true;
+
+        // Extract metadata
+        const sn = device.serialNumber || "0K7014Z0";
+        const devName = device.name || "Vernier Go Direct Respiration Belt";
+        const orderCode = device.orderCode || "GDX-RB";
+
+        // Update UI Badges
+        const hwBadge = document.getElementById("hw-status-badge");
+        const hwText = document.getElementById("hw-status-text");
+        hwBadge.className = "status-pill connected";
+        hwText.innerText = `VERNIER ${orderCode} (${useBluetooth ? 'BLE' : 'USB'})`;
+
+        const connBadge = document.getElementById("conn-mode-badge");
+        if (connBadge) {
+          connBadge.innerText = useBluetooth ? "BROWSER BLE" : "BROWSER WEBHID";
+          connBadge.style.color = "var(--status-active)";
+        }
+
+        document.getElementById("hw-device-name").innerText = devName;
+        document.getElementById("hw-order-code").innerText = orderCode;
+        document.getElementById("hw-serial").innerText = sn;
+        document.getElementById("footer-serial").innerText = sn;
+        document.getElementById("btn-rescan-text").innerText = "Disconnect";
+
+        // Enable Force (Channel 1) and Respiration Rate (Channel 2)
+        device.sensors.forEach(s => {
+          const nameLower = (s.name || "").toLowerCase();
+          if (nameLower.includes("force") || s.number === 1) s.setEnabled(true);
+          if (nameLower.includes("rate") || nameLower.includes("respiration") || s.number === 2) s.setEnabled(true);
+        });
+
+        // Initialize streaming counters
+        browserStartTime = Date.now();
+        browserSampleCount = 0;
+        browserBreathCount = recordedSessionData.length > 0 ? (recordedSessionData[recordedSessionData.length - 1].breath_count || 0) : 0;
+
+        // Start measurement sampling at 10 Hz (100 ms period)
+        device.start(100);
+        updateSensorActiveUI(true);
+
+        // Attach event listener
+        device.sensors.forEach(sensor => {
+          sensor.on('value-changed', (s) => {
+            handleBrowserSensorReading(s);
+          });
+        });
+
+        console.log(`[WebHID/BLE] Streaming active for ${devName} (${sn}) via ${modeStr}.`);
+      } catch (err) {
+        console.error("Browser device connection failed:", err);
+        if (err.name !== "NotFoundError" && !err.message.includes("cancelled") && !err.message.includes("No device selected")) {
+          alert("Could not connect to Vernier belt: " + err.message);
+        }
       }
     }
 
-    function stopSensor() {
-      if (socket && socket.connected) {
-        socket.emit("stop_sensor");
-      } else {
-        stopCloudPlayback();
+    function handleBrowserSensorReading(sensor) {
+      const nameLower = (sensor.name || "").toLowerCase();
+
+      // Channel 2: Respiration Rate (BPM)
+      if (nameLower.includes("rate") || nameLower.includes("respiration") || sensor.number === 2) {
+        if (sensor.value && sensor.value > 0) {
+          lastBpm = sensor.value;
+        }
+        return;
+      }
+
+      // Channel 1: Force Transducer (N)
+      if (nameLower.includes("force") || sensor.number === 1) {
+        lastRawForce = sensor.value;
+        browserSampleCount++;
+
+        const elapsed = (Date.now() - (browserStartTime || Date.now())) / 1000.0;
+        const now = new Date();
+        const timeStr = now.toTimeString().slice(0, 8) + "." + Math.floor(now.getMilliseconds() / 100);
+
+        // Net excursion force
+        const netExpansion = Math.max(0, lastRawForce - browserTareOffset);
+
+        // Low-pass filter for smooth motion direction & phase detection
+        forceFilterWindow.push(netExpansion);
+        if (forceFilterWindow.length > 5) forceFilterWindow.shift();
+        const smoothed = forceFilterWindow.reduce((a, b) => a + b, 0) / forceFilterWindow.length;
+        const delta = (smoothed - lastFilteredForce) * 10.0;
+        lastFilteredForce = smoothed;
+
+        if (delta > 0.08) browserPhase = "Inhale";
+        else if (delta < -0.08) browserPhase = "Exhale";
+        else browserPhase = "Plateau";
+
+        // Real-time breath cycle detection
+        if (browserPhase === "Exhale" && peakState === "seeking_peak") {
+          peakState = "seeking_trough";
+          browserBreathCount++;
+          const curTime = Date.now();
+          if (lastPeakTime > 0) {
+            const periodSec = (curTime - lastPeakTime) / 1000.0;
+            if (periodSec >= 1.5 && periodSec <= 15.0) {
+              const instBpm = 60.0 / periodSec;
+              lastBpm = Math.round((lastBpm * 0.7 + instBpm * 0.3) * 10) / 10;
+            }
+          }
+          lastPeakTime = curTime;
+        } else if (browserPhase === "Inhale" && peakState === "seeking_trough") {
+          peakState = "seeking_peak";
+        }
+
+        // Send into high-fidelity oscilloscope & radiation oncology gating pipeline
+        processIncomingSample({
+          timestamp: elapsed,
+          time_str: timeStr,
+          value: netExpansion,
+          raw_force: lastRawForce,
+          tare_offset: browserTareOffset,
+          phase: browserPhase,
+          bpm: lastBpm,
+          sample_count: browserSampleCount,
+          breath_count: browserBreathCount,
+          amplitude: currentAmplitude,
+          noise_level: currentNoise
+        });
       }
     }
 
-    function startCloudPlayback() {
-      if (cachedSessionSamples.length === 0) {
-        enableCloudModeFallback().then(() => {
-          if (cachedSessionSamples.length > 0) startCloudPlayback();
+    async function disconnectOrRescanHardware() {
+      if (browserGdxDevice) {
+        try {
+          await browserGdxDevice.close();
+        } catch(e) {}
+        browserGdxDevice = null;
+        activeConnectionMode = "idle";
+        isHardwareConnected = false;
+        updateSensorActiveUI(false);
+
+        const hwBadge = document.getElementById("hw-status-badge");
+        const hwText = document.getElementById("hw-status-text");
+        hwBadge.className = "status-pill disconnected";
+        hwText.innerText = "SENSOR DISCONNECTED";
+
+        const connBadge = document.getElementById("conn-mode-badge");
+        if (connBadge) {
+          connBadge.innerText = "DISCONNECTED";
+          connBadge.style.color = "var(--text-muted)";
+        }
+        document.getElementById("btn-rescan-text").innerText = "Rescan / Demo";
+        return;
+      }
+
+      if (socket && socket.connected) {
+        socket.emit("reconnect_sensor");
+        return;
+      }
+
+      // If running on Vercel without hardware, toggle authentic session demo playback
+      toggleDemoPlayback();
+    }
+
+    function toggleDemoPlayback() {
+      if (cloudPlaybackInterval) {
+        stopDemoPlayback();
+      } else {
+        startDemoPlayback();
+      }
+    }
+
+    function startDemoPlayback() {
+      if (cloudPlaybackInterval) clearInterval(cloudPlaybackInterval);
+      if (cachedDemoSamples.length === 0) {
+        checkVercelOrCloudMode().then(() => {
+          if (cachedDemoSamples.length > 0) startDemoPlayback();
         });
         return;
       }
 
+      activeConnectionMode = "replay";
       updateSensorActiveUI(true);
-      if (cloudPlaybackInterval) clearInterval(cloudPlaybackInterval);
+
+      const connBadge = document.getElementById("conn-mode-badge");
+      if (connBadge) {
+        connBadge.innerText = "DEMO REPLAY (10 Hz)";
+        connBadge.style.color = "var(--accent-amber)";
+      }
+
+      const hwBadge = document.getElementById("hw-status-badge");
+      const hwText = document.getElementById("hw-status-text");
+      hwBadge.className = "status-pill connected";
+      hwText.innerText = "VERNIER 0K7014Z0 REPLAY";
+
+      document.getElementById("btn-rescan-text").innerText = "Stop Demo";
 
       cloudPlaybackInterval = setInterval(() => {
-        if (cloudPlaybackIndex >= cachedSessionSamples.length) {
-          cloudPlaybackIndex = 0; // loop playback smoothly
+        if (cloudPlaybackIndex >= cachedDemoSamples.length) {
+          cloudPlaybackIndex = 0; // loop seamlessly
         }
-        const sample = cachedSessionSamples[cloudPlaybackIndex];
+        const sample = cachedDemoSamples[cloudPlaybackIndex];
         cloudPlaybackIndex++;
 
         processIncomingSample({
@@ -2082,24 +2460,70 @@
       }, 100); // 10 Hz
     }
 
-    function stopCloudPlayback() {
+    function stopDemoPlayback() {
       if (cloudPlaybackInterval) {
         clearInterval(cloudPlaybackInterval);
         cloudPlaybackInterval = null;
       }
+      activeConnectionMode = "idle";
       updateSensorActiveUI(false);
+      document.getElementById("btn-rescan-text").innerText = "Rescan / Demo";
+      const connBadge = document.getElementById("conn-mode-badge");
+      if (connBadge) {
+        connBadge.innerText = "STANDBY";
+        connBadge.style.color = "var(--text-muted)";
+      }
+    }
+
+    // Hardware Actions
+    function startSensor() {
+      if (browserGdxDevice && browserGdxDevice.opened) {
+        browserGdxDevice.start(100);
+        updateSensorActiveUI(true);
+        return;
+      }
+      if (socket && socket.connected) {
+        socket.emit("start_sensor");
+        return;
+      }
+      startDemoPlayback();
+    }
+
+    function stopSensor() {
+      if (browserGdxDevice && browserGdxDevice.opened) {
+        browserGdxDevice.stop();
+        updateSensorActiveUI(false);
+        return;
+      }
+      if (socket && socket.connected) {
+        socket.emit("stop_sensor");
+        return;
+      }
+      stopDemoPlayback();
     }
 
     function tareSensor() {
+      if (browserGdxDevice && browserGdxDevice.opened) {
+        browserTareOffset = lastRawForce;
+        document.getElementById("force-tare-val").innerText = browserTareOffset.toFixed(3) + " N";
+        return;
+      }
       if (socket && socket.connected) {
         socket.emit("tare_sensor");
+        return;
       }
+      fetch("/api/tare", { method: "POST" })
+        .then(r => r.json())
+        .then(st => {
+          if (st.tare_offset !== undefined) {
+            document.getElementById("force-tare-val").innerText = st.tare_offset.toFixed(3) + " N";
+          }
+        })
+        .catch(() => {});
     }
 
     function reconnectHardware() {
-      if (socket && socket.connected) {
-        socket.emit("reconnect_sensor");
-      }
+      disconnectOrRescanHardware();
     }
 
     function updateSensorActiveUI(active) {
@@ -2159,4 +2583,5 @@
     });
   </script>
 </body>
+
 </html>
