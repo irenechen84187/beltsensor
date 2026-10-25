@@ -2188,10 +2188,19 @@
           </svg>
           <span>Multi-Session Experiment Comparison &bull; Consistency vs. Irregularity</span>
         </div>
-        <div style="display: flex; align-items: center; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
           <span id="saved-sessions-count" class="badge-subtle">0 Sessions Saved</span>
-          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.72rem; background: rgba(255,255,255,0.06); border: 1px solid var(--border-subtle); color: #cbd5e1; border-radius: 6px; cursor: pointer;" onclick="exportAllSessionsJSON()" title="Export all experimental sessions as combined JSON">
+          <input type="file" id="import-sessions-input" accept=".json" style="display: none;" onchange="importSessionsJSON(event)">
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.72rem; background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.3); color: #38bdf8; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;" onclick="document.getElementById('import-sessions-input').click()" title="Import saved experimental sessions from JSON file">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            Import JSON
+          </button>
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.72rem; background: rgba(255,255,255,0.06); border: 1px solid var(--border-subtle); color: #cbd5e1; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 4px;" onclick="exportAllSessionsJSON()" title="Export all experimental sessions as combined JSON">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             Export All JSON
+          </button>
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.72rem; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); color: #f87171; border-radius: 6px; cursor: pointer;" onclick="clearAllSessions()" title="Clear all saved sessions">
+            Clear All
           </button>
         </div>
       </div>

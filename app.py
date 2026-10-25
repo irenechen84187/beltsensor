@@ -30,6 +30,7 @@ app = Flask(
     static_folder=os.path.join(BASE_DIR, "static")
 )
 app.config['SECRET_KEY'] = 'respitrack_belt_sensor_key_2026'
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 
 # Threading mode is robust across all modern Python versions (3.10-3.14+)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
