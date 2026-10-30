@@ -44,7 +44,7 @@ class PhysicalBeltSensor:
     """
 
     def __init__(self):
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self.godirect = None
         self.device = None
         self.is_connected = False
